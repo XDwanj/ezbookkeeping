@@ -2,7 +2,9 @@
 
 项目已有 Dockerfile，默认以 `1000:1000` 运行。此配置在仓库根目录提供
 Docker Compose 部署，并为 fork 增加独立的 GHCR 发布流程；无需配置上游的
-Docker Hub 账号，也不修改原有 Docker Hub 工作流。
+Docker Hub 账号。上游 `Build Snapshot` 自动构建流程已移除，避免每次推送
+重复构建多架构镜像和 Windows/macOS 安装包；版本标签触发的 `Build Release`
+流程仍保留。
 
 ## 1. 发布自己的 GHCR 镜像
 
