@@ -145,13 +145,12 @@ build_backend() {
 
     if [ "$NO_TEST" = "0" ]; then
         echo "Executing backend unit testing..."
-        go clean -cache
-
+        # Reuse compiled packages, but always execute the tests.
         if [ -z "$SKIP_TESTS" ]; then
-            go test ./... -v
+            go test ./... -v -count=1
         else
             echo "(Skip unit test \"$SKIP_TESTS\")"
-            go test ./... -v -skip "$SKIP_TESTS"
+            go test ./... -v -count=1 -skip "$SKIP_TESTS"
         fi
 
         if [ "$?" != "0" ]; then
@@ -175,7 +174,7 @@ build_backend() {
 
     echo "Building backend binary file ($RELEASE_TYPE)..."
 
-    CGO_ENABLED=1 go build -a -v -trimpath -ldflags "-w -s $ld_static_link_flags $backend_build_extra_arguments" -o ezbookkeeping ezbookkeeping.go
+    CGO_ENABLED=1 go build -v -trimpath -ldflags "-w -s $ld_static_link_flags $backend_build_extra_arguments" -o ezbookkeeping ezbookkeeping.go
     chmod +x ezbookkeeping
 }
 

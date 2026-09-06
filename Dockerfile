@@ -1,5 +1,11 @@
 # Build backend binary file
 FROM golang:1.27.1-alpine3.24 AS be-builder
+WORKDIR /go/src/github.com/mayswind/ezbookkeeping
+RUN apk --no-cache add git gcc g++ libc-dev
+# Source and build metadata changes must not invalidate dependency downloads.
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
 ARG RELEASE_BUILD
 ARG BUILD_PIPELINE
 ARG BUILD_UNIXTIME
@@ -12,14 +18,16 @@ ENV BUILD_UNIXTIME=$BUILD_UNIXTIME
 ENV BUILD_DATE=$BUILD_DATE
 ENV CHECK_3RD_API=$CHECK_3RD_API
 ENV SKIP_TESTS=$SKIP_TESTS
-WORKDIR /go/src/github.com/mayswind/ezbookkeeping
-COPY . .
 RUN docker/backend-build-pre-setup.sh
-RUN apk add git gcc g++ libc-dev
 RUN ./build.sh backend
 
 # Build frontend files
 FROM --platform=$BUILDPLATFORM node:26.8.1-alpine3.24 AS fe-builder
+WORKDIR /go/src/github.com/mayswind/ezbookkeeping
+RUN apk --no-cache add git
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
 ARG RELEASE_BUILD
 ARG BUILD_PIPELINE
 ARG BUILD_UNIXTIME
@@ -30,10 +38,7 @@ ENV BUILD_PIPELINE=$BUILD_PIPELINE
 ENV BUILD_UNIXTIME=$BUILD_UNIXTIME
 ENV BUILD_DATE=$BUILD_DATE
 ENV NODE_OPTIONS=$BUILD_NODE_OPTIONS
-WORKDIR /go/src/github.com/mayswind/ezbookkeeping
-COPY . .
 RUN docker/frontend-build-pre-setup.sh
-RUN apk add git
 RUN ./build.sh frontend
 
 # Package docker image
