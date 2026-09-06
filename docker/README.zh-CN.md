@@ -17,8 +17,9 @@ Docker Hub 账号，也不修改原有 Docker Hub 工作流。
 
 预发布版本只生成对应预发布版本标签及提交标签，不覆盖 `latest`。
 镜像仓库名称自动取当前仓库的小写形式：本 fork 为
-`ghcr.io/xdwanj/ezbookkeeping`。构建复用现有 Dockerfile 和 Bake 配置，支持
-`linux/amd64`、`linux/arm64`、`linux/arm/v7`、`linux/arm/v6`。
+`ghcr.io/xdwanj/ezbookkeeping`。构建复用现有 Dockerfile 和 Bake 配置，当前
+GHCR 发布仅支持 `linux/amd64`（x86-64），使用 x86 runner 原生编译，不使用
+QEMU，也不构建 ARM 镜像。上游原有的多架构 Bake 目标保持不变。
 
 认证使用 GitHub 自动提供的 `GITHUB_TOKEN`，工作流声明 `packages: write`，
 不需要手工添加 Docker Hub 密码或发布 PAT。若仓库/组织策略禁止写入 Packages，
@@ -92,7 +93,7 @@ docker compose up -d
 ```mermaid
 flowchart LR
     A[自己的 GitHub fork] --> B[GitHub Actions 构建]
-    B --> C[自己的 GHCR 多架构镜像]
+    B --> C[自己的 GHCR AMD64 镜像]
     C --> D[根目录 Docker Compose]
     D --> E[应用进程：UID 1000 或 root]
     E --> F[命名卷：数据库 / 日志 / 附件]

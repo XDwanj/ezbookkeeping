@@ -45,9 +45,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -58,16 +55,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and publish multi-platform image
+      - name: Build and publish AMD64 image
         uses: docker/bake-action@v7
         with:
           source: .
           files: |
             ./docker-bake.hcl
             cwd://${{ steps.meta.outputs.bake-file }}
-          targets: image-all
+          targets: image
           push: true
           set: |
+            *.platform=linux/amd64
             *.args.RELEASE_BUILD=${{ startsWith(github.ref, 'refs/tags/v') && '1' || '0' }}
             *.args.BUILD_PIPELINE=1
             *.args.BUILD_UNIXTIME=${{ steps.variables.outputs.build_unix_time }}
@@ -75,5 +73,5 @@ jobs:
             *.args.BUILD_NODE_OPTIONS=${{ vars.BUILD_NODE_OPTIONS }}
             *.args.CHECK_3RD_API=${{ vars.CHECK_3RD_API }}
             *.args.SKIP_TESTS=${{ vars.SKIP_TESTS }}
-            *.cache-from=type=gha,scope=ghcr
-            *.cache-to=type=gha,mode=max,scope=ghcr
+            *.cache-from=type=gha,scope=ghcr-amd64
+            *.cache-to=type=gha,mode=max,scope=ghcr-amd64
