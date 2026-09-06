@@ -1,0 +1,16 @@
+# Keep .git: build.sh reads the commit hash for version information.
+.env
+.env.*
+!.env.example
+node_modules
+dist
+/ezbookkeeping
+/package
+/data
+/log
+/storage
+.idea
+.vscode
+.codex
+.planning
+.DS_Store

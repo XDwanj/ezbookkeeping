@@ -64,6 +64,13 @@ For a full list of features, visit the [Full Feature List](https://ezbookkeeping
 
 ## Installation
 ### Run with Docker
+For this fork, see the [Docker Compose and GHCR deployment guide (中文)](docker/README.zh-CN.md)
+for persistent deployment, optional root operation, and publishing images to your own
+`ghcr.io/<owner>/<repository>` using GitHub Actions. The root-level `compose.yaml`
+defaults to `ghcr.io/xdwanj/ezbookkeeping:latest-snapshot` (available after a successful GHCR build).
+
+The following Docker Hub images belong to the upstream project.
+
 Visit [Docker Hub](https://hub.docker.com/r/mayswind/ezbookkeeping) to see all images and tags.
 
 **Latest Release:**

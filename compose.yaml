@@ -1,0 +1,20 @@
+services:
+  ezbookkeeping:
+    image: ${EBK_IMAGE:-ghcr.io/xdwanj/ezbookkeeping:latest-snapshot}
+    restart: unless-stopped
+    user: "${EBK_CONTAINER_USER:-1000:1000}"
+    ports:
+      - "${EBK_BIND_ADDRESS:-0.0.0.0}:${EBK_PORT:-8080}:8080"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      EBK_SERVER_ROOT_URL: ${EBK_SERVER_ROOT_URL:-http://localhost:8080/}
+      EBK_SECURITY_SECRET_KEY: ${EBK_SECURITY_SECRET_KEY:?Set EBK_SECURITY_SECRET_KEY in .env}
+    volumes:
+      - data:/ezbookkeeping/data
+      - log:/ezbookkeeping/log
+      - storage:/ezbookkeeping/storage
+
+volumes:
+  data:
+  log:
+  storage:
