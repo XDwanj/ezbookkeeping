@@ -252,6 +252,12 @@ export const useSettingsStore = defineStore('settings', () => {
         updateUserApplicationCloudSettingValue('overviewTransactionCategoryFilterInHomePage', value);
     }
 
+    function setOverviewTransactionTagFilterInHomePage(value: string): void {
+        updateApplicationSettingsValue('overviewTransactionTagFilterInHomePage', value);
+        appSettings.value.overviewTransactionTagFilterInHomePage = value;
+        updateUserApplicationCloudSettingValue('overviewTransactionTagFilterInHomePage', value);
+    }
+
     // Transaction List Page
     function setItemsCountInTransactionListPage(value: number): void {
         updateApplicationSettingsValue('itemsCountInTransactionListPage', value);
@@ -263,6 +269,12 @@ export const useSettingsStore = defineStore('settings', () => {
         updateApplicationSettingsValue('showTotalAmountInTransactionListPage', value);
         appSettings.value.showTotalAmountInTransactionListPage = value;
         updateUserApplicationCloudSettingValue('showTotalAmountInTransactionListPage', value);
+    }
+
+    function setTotalAmountTypeInTransactionListPage(value: number): void {
+        updateApplicationSettingsValue('totalAmountTypeInTransactionListPage', value);
+        appSettings.value.totalAmountTypeInTransactionListPage = value;
+        updateUserApplicationCloudSettingValue('totalAmountTypeInTransactionListPage', value);
     }
 
     function setShowTagInTransactionListPage(value: boolean): void {
@@ -373,6 +385,12 @@ export const useSettingsStore = defineStore('settings', () => {
         updateApplicationSettingsValue('hideCategoriesWithoutAccounts', value);
         appSettings.value.hideCategoriesWithoutAccounts = value;
         updateUserApplicationCloudSettingValue('hideCategoriesWithoutAccounts', value);
+    }
+
+    function setDefaultCreditCardAmountDisplayTypeInMobile(value: number): void {
+        updateApplicationSettingsValue('defaultCreditCardAmountDisplayTypeInMobile', value);
+        appSettings.value.defaultCreditCardAmountDisplayTypeInMobile = value;
+        updateUserApplicationCloudSettingValue('defaultCreditCardAmountDisplayTypeInMobile', value);
     }
 
     function setReconciliationStatementButtonDefaultDateRangeTypeInDesktop(value: number): void {
@@ -619,9 +637,11 @@ export const useSettingsStore = defineStore('settings', () => {
         setTimezoneUsedForStatisticsInHomePage,
         setOverviewAccountFilterInHomePage,
         setOverviewTransactionCategoryFilterInHomePage,
+        setOverviewTransactionTagFilterInHomePage,
         // -- Transaction List Page
         setItemsCountInTransactionListPage,
         setShowTotalAmountInTransactionListPage,
+        setTotalAmountTypeInTransactionListPage,
         setShowTagInTransactionListPage,
         setDefaultKeywordMatchModeInTransactionListPage,
         // -- Transaction Edit Page
@@ -644,6 +664,7 @@ export const useSettingsStore = defineStore('settings', () => {
         // -- Account List Page
         setTotalAmountExcludeAccountIds,
         setHideCategoriesWithoutAccounts,
+        setDefaultCreditCardAmountDisplayTypeInMobile,
         setReconciliationStatementButtonDefaultDateRangeTypeInDesktop,
         setReconciliationStatementPageDefaultDateRangeTypeInMobile,
         // -- Exchange Rates Data Page

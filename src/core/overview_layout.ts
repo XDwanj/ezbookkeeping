@@ -12,7 +12,8 @@ export enum OverviewWidgetType {
     ExpenseCategoryRanking = 'expense-category-ranking',
     RecentTransactions = 'recent-transactions',
     TransactionCalendar = 'transaction-calendar',
-    TransactionCalendarHeatmap = 'transaction-calendar-heatmap'
+    TransactionCalendarHeatmap = 'transaction-calendar-heatmap',
+    AddTransactionButton = 'add-transaction-button'
 }
 
 export enum OverviewWidgetDataRequirement {
@@ -31,7 +32,7 @@ export enum OverviewWidgetDataRequirement {
 export type OverviewWidgetSettingValue = string | number | boolean | (string | number)[];
 
 interface OverviewWidgetSettingItemBase {
-    settingType: 'itemCountSelect' | 'monthSelect' | 'accountSelect' | 'categorySelect' | 'tagSelect' | 'customSelect' | 'switch' | 'color' | 'amount' | 'textbox';
+    settingType: 'itemCountSelect' | 'monthSelect' | 'accountSelect' | 'categorySelect' | 'tagSelect' | 'customSelect' | 'switch' | 'color' | 'amount' | 'amountFilter' | 'textbox';
     settingName: string;
     displayName: string;
     condition?: (settings?: Record<string, OverviewWidgetSettingValue>) => boolean;
@@ -80,6 +81,10 @@ export interface OverviewWidgetAmountSettingItem extends OverviewWidgetSettingIt
     settingType: 'amount';
 }
 
+export interface OverviewWidgetAmountFilterSettingItem extends OverviewWidgetSettingItemBase {
+    settingType: 'amountFilter';
+}
+
 export interface OverviewWidgetTextboxSettingItem extends OverviewWidgetSettingItemBase {
     settingType: 'textbox';
     placeholder?: string;
@@ -94,6 +99,7 @@ export type OverviewWidgetSettingItem = OverviewWidgetItemCountSelectSettingItem
     OverviewWidgetSwitchSettingItem |
     OverviewWidgetColorSettingItem |
     OverviewWidgetAmountSettingItem |
+    OverviewWidgetAmountFilterSettingItem |
     OverviewWidgetTextboxSettingItem;
 
 export interface OverviewRecentTransactionsQuery {
@@ -167,4 +173,10 @@ export interface MobileOverviewWidgetLayout extends OverviewWidgetLayoutBase {
     id: string;
     type: OverviewWidgetType;
     settings: Record<string, OverviewWidgetSettingValue>;
+}
+
+export enum MobileOverviewWidgetNavigationType {
+    Url = 'url',
+    AIClipboardTextRecognition = 'ai-clipboard-text-recognition',
+    AIImageRecognition = 'ai-image-recognition'
 }

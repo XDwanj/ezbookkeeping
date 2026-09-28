@@ -3,7 +3,9 @@ import { TimezoneTypeForStatistics } from './timezone.ts';
 import { CurrencySortingType } from './currency.ts';
 import { KeywordMatchMode } from './text.ts';
 import { ImageUploadQualityType } from './image.ts';
+import { CreditCardAmountDisplayType } from './account.ts';
 import {
+    TransactionAmountType,
     TransactionQuickSaveButtonStyle,
     TransactionQuickAddButtonActionType
 } from './transaction.ts';
@@ -54,11 +56,13 @@ export interface ApplicationSettings extends BaseApplicationSetting {
     timezoneUsedForStatisticsInHomePage: number;
     overviewAccountFilterInHomePage: Record<string, boolean>;
     overviewTransactionCategoryFilterInHomePage: Record<string, boolean>;
+    overviewTransactionTagFilterInHomePage: string;
     // Transaction List Page
     quickSaveButtonStyleInMobileTransactionListPage: number;
     quickAddButtonActionInMobileTransactionEditPage: number;
     itemsCountInTransactionListPage: number;
     showTotalAmountInTransactionListPage: boolean;
+    totalAmountTypeInTransactionListPage: number;
     showTagInTransactionListPage: boolean;
     defaultKeywordMatchModeInTransactionListPage: number;
     // Transaction Edit Page
@@ -79,6 +83,7 @@ export interface ApplicationSettings extends BaseApplicationSetting {
     // Account List Page
     totalAmountExcludeAccountIds: Record<string, boolean>;
     hideCategoriesWithoutAccounts: boolean;
+    defaultCreditCardAmountDisplayTypeInMobile: number;
     reconciliationStatementButtonDefaultDateRangeTypeInDesktop: number;
     reconciliationStatementPageDefaultDateRangeTypeInMobile: number;
     // Exchange Rates Data Page
@@ -144,9 +149,11 @@ export const ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES: Record<string, UserAp
     'timezoneUsedForStatisticsInHomePage': UserApplicationCloudSettingType.Number,
     'overviewAccountFilterInHomePage': UserApplicationCloudSettingType.StringBooleanMap,
     'overviewTransactionCategoryFilterInHomePage': UserApplicationCloudSettingType.StringBooleanMap,
+    'overviewTransactionTagFilterInHomePage': UserApplicationCloudSettingType.String,
     // Transaction List Page
     'itemsCountInTransactionListPage': UserApplicationCloudSettingType.Number,
     'showTotalAmountInTransactionListPage': UserApplicationCloudSettingType.Boolean,
+    'totalAmountTypeInTransactionListPage': UserApplicationCloudSettingType.Number,
     'showTagInTransactionListPage': UserApplicationCloudSettingType.Boolean,
     'defaultKeywordMatchModeInTransactionListPage': UserApplicationCloudSettingType.Number,
     // Transaction Edit Page
@@ -169,6 +176,7 @@ export const ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES: Record<string, UserAp
     // Account List Page
     'totalAmountExcludeAccountIds': UserApplicationCloudSettingType.StringBooleanMap,
     'hideCategoriesWithoutAccounts': UserApplicationCloudSettingType.Boolean,
+    'defaultCreditCardAmountDisplayTypeInMobile': UserApplicationCloudSettingType.Number,
     'reconciliationStatementButtonDefaultDateRangeTypeInDesktop': UserApplicationCloudSettingType.Number,
     'reconciliationStatementPageDefaultDateRangeTypeInMobile': UserApplicationCloudSettingType.Number,
     // Exchange Rates Data Page
@@ -216,9 +224,11 @@ export const DEFAULT_APPLICATION_SETTINGS: ApplicationSettings = {
     timezoneUsedForStatisticsInHomePage: TimezoneTypeForStatistics.Default.type,
     overviewAccountFilterInHomePage: {},
     overviewTransactionCategoryFilterInHomePage: {},
+    overviewTransactionTagFilterInHomePage: '',
     // Transaction List Page
     itemsCountInTransactionListPage: 15,
     showTotalAmountInTransactionListPage: true,
+    totalAmountTypeInTransactionListPage: TransactionAmountType.InflowsAndOutflows,
     showTagInTransactionListPage: true,
     defaultKeywordMatchModeInTransactionListPage: KeywordMatchMode.Default.type,
     // Transaction Edit Page
@@ -241,6 +251,7 @@ export const DEFAULT_APPLICATION_SETTINGS: ApplicationSettings = {
     // Account List Page
     totalAmountExcludeAccountIds: {},
     hideCategoriesWithoutAccounts: false,
+    defaultCreditCardAmountDisplayTypeInMobile: CreditCardAmountDisplayType.Default.type,
     reconciliationStatementButtonDefaultDateRangeTypeInDesktop: DEFAULT_RECONCILIATION_STATEMENT_DATE_RANGE_IN_DESKTOP.type,
     reconciliationStatementPageDefaultDateRangeTypeInMobile: DEFAULT_RECONCILIATION_STATEMENT_DATE_RANGE_IN_MOBILE.type,
     // Exchange Rates Data Page

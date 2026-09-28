@@ -1,7 +1,7 @@
 package models
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 )
 
 type UserApplicationCloudSettingType string
@@ -28,9 +28,11 @@ var ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES = map[string]UserApplicationClo
 	"timezoneUsedForStatisticsInHomePage":         USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"overviewAccountFilterInHomePage":             USER_APPLICATION_CLOUD_SETTING_TYPE_STRING_BOOLEAN_MAP,
 	"overviewTransactionCategoryFilterInHomePage": USER_APPLICATION_CLOUD_SETTING_TYPE_STRING_BOOLEAN_MAP,
+	"overviewTransactionTagFilterInHomePage":      USER_APPLICATION_CLOUD_SETTING_TYPE_STRING,
 	// Transaction List Page
 	"itemsCountInTransactionListPage":              USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"showTotalAmountInTransactionListPage":         USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
+	"totalAmountTypeInTransactionListPage":         USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"showTagInTransactionListPage":                 USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
 	"defaultKeywordMatchModeInTransactionListPage": USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	// Transaction Edit Page
@@ -53,6 +55,7 @@ var ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES = map[string]UserApplicationClo
 	// Account List Page
 	"totalAmountExcludeAccountIds":                               USER_APPLICATION_CLOUD_SETTING_TYPE_STRING_BOOLEAN_MAP,
 	"hideCategoriesWithoutAccounts":                              USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
+	"defaultCreditCardAmountDisplayTypeInMobile":                 USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"reconciliationStatementButtonDefaultDateRangeTypeInDesktop": USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"reconciliationStatementPageDefaultDateRangeTypeInMobile":    USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	// Exchange Rates Data Page

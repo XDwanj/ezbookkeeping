@@ -7,6 +7,7 @@
                                  :item-count="widget.settings['itemCount'] as number"
                                  :sort-by="widget.settings['sortBy'] as string"
                                  :always-show-amount="widget.settings['alwaysShowAmount'] as boolean"
+                                 :show-available-credit-for-credit-card="widget.settings['showAvailableCreditForCreditCard'] as boolean"
                                  v-else-if="widget.type === OverviewWidgetType.AccountBalanceList" />
 
     <monthly-expense-overview-widget :loading="loading"
@@ -56,6 +57,7 @@
                                 v-else-if="widget.type === OverviewWidgetType.RecentTransactions" />
 
     <transaction-calendar-widget :loading="loading" :editing="editing" :title="widgetTitle"
+                                 :total-amount-type="widget.settings['totalAmountType'] as number"
                                  :transaction-types="widget.settings['transactionTypes'] as number[]"
                                  :show-alternate-date="widget.settings['showAlternateDate'] as boolean"
                                  :show-amount="widget.settings['showAmount'] as boolean"
@@ -64,6 +66,9 @@
     <transaction-calendar-heatmap-widget :loading="loading" :editing="editing" :title="widgetTitle"
                                          :transaction-type="widget.settings['transactionType'] as TransactionType"
                                          :months="widget.settings['months'] as number"
+                                         :outlier-color-mode="widget.settings['outlierColorMode'] as TransactionCalendarHeatmapOutlierColorMode"
+                                         :outlier-top-count="widget.settings['outlierTopCount'] as number"
+                                         :outlier-amount-threshold="widget.settings['outlierAmountThreshold'] as number"
                                          v-else-if="widget.type === OverviewWidgetType.TransactionCalendarHeatmap" />
 </template>
 
@@ -84,6 +89,7 @@ import TransactionCalendarWidget from './widgets/TransactionCalendarWidget.vue';
 import TransactionCalendarHeatmapWidget from './widgets/TransactionCalendarHeatmapWidget.vue';
 
 import { TransactionType } from '@/core/transaction.ts';
+import { TransactionCalendarHeatmapOutlierColorMode } from '@/core/chart.ts';
 import {
     type DesktopOverviewWidgetLayout,
     OverviewWidgetType

@@ -109,6 +109,7 @@
                                 <v-col cols="12" v-if="type === TransactionEditPageType.Template && transaction instanceof TransactionTemplate">
                                     <v-text-field
                                         type="text"
+                                        autocomplete="off"
                                         persistent-placeholder
                                         :disabled="loading || submitting || recognizing"
                                         :label="tt('Template Name')"
@@ -298,13 +299,7 @@
                                         :no-data-text="tt('No results')"
                                         :model-value="transaction.timeZone"
                                         @update:model-value="updateTransactionTimezone"
-                                    >
-                                        <template #selection="{ internalItem }">
-                                                <span class="text-truncate" v-if="transaction.timeZone || transaction.timeZone === ''">
-                                                    {{ internalItem.title }}
-                                                </span>
-                                        </template>
-                                    </v-autocomplete>
+                                    />
                                 </v-col>
                                 <v-col cols="12" md="6" v-if="type === TransactionEditPageType.Template && transaction instanceof TransactionTemplate && transaction.templateType === TemplateType.Schedule.type">
                                     <date-select
@@ -359,6 +354,7 @@
                                 <v-col cols="12" md="12">
                                     <v-textarea
                                         type="text"
+                                        autocomplete="off"
                                         persistent-placeholder
                                         rows="3"
                                         :readonly="mode === TransactionEditPageMode.View"
@@ -495,7 +491,7 @@
             <template #content>
                 <v-textarea no-resize persistent-placeholder
                             class="w-100 h-100 ps-4 always-cursor-text"
-                            rows="10" density="compact" variant="plain" :rounded="false"
+                            rows="10" autocomplete="off" density="compact" variant="plain" :rounded="false"
                             :disabled="recognizing"
                             :placeholder="tt('Click here to paste a transaction description')"
                             v-model="pastedText"></v-textarea>

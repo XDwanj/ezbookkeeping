@@ -43,7 +43,8 @@ export const ALL_APPLICATION_CLOUD_SETTINGS: CategorizedApplicationCloudSettingI
             { settingKey: 'showAmountInHomePage', settingName: 'Show Amount', mobile: true, desktop: true },
             { settingKey: 'timezoneUsedForStatisticsInHomePage', settingName: 'Timezone Used for Statistics', mobile: true, desktop: true },
             { settingKey: 'overviewAccountFilterInHomePage', settingName: 'Accounts Included in Overview Statistics', mobile: true, desktop: true },
-            { settingKey: 'overviewTransactionCategoryFilterInHomePage', settingName: 'Transaction Categories Included in Overview Statistics', mobile: true, desktop: true }
+            { settingKey: 'overviewTransactionCategoryFilterInHomePage', settingName: 'Transaction Categories Included in Overview Statistics', mobile: true, desktop: true },
+            { settingKey: 'overviewTransactionTagFilterInHomePage', settingName: 'Transaction Tags Included in Overview Statistics', mobile: true, desktop: true }
         ]
     },
     {
@@ -51,6 +52,7 @@ export const ALL_APPLICATION_CLOUD_SETTINGS: CategorizedApplicationCloudSettingI
         items: [
             { settingKey: 'itemsCountInTransactionListPage', settingName: 'Transactions Per Page', mobile: false, desktop: true },
             { settingKey: 'showTotalAmountInTransactionListPage', settingName: 'Show Monthly Total Amount', mobile: true, desktop: true },
+            { settingKey: 'totalAmountTypeInTransactionListPage', settingName: 'Total Amount Calculation Method', mobile: true, desktop: true },
             { settingKey: 'showTagInTransactionListPage', settingName: 'Show Transaction Tags', mobile: true, desktop: true },
             { settingKey: 'defaultKeywordMatchModeInTransactionListPage', settingName: 'Default Keyword Search Matching Mode', mobile: true, desktop: true }
         ]
@@ -96,6 +98,7 @@ export const ALL_APPLICATION_CLOUD_SETTINGS: CategorizedApplicationCloudSettingI
         items: [
             { settingKey: 'totalAmountExcludeAccountIds', settingName: 'Accounts Included in Total', mobile: true, desktop: true },
             { settingKey: 'hideCategoriesWithoutAccounts', settingName: 'Hide Categories Without Accounts', mobile: false, desktop: true },
+            { settingKey: 'defaultCreditCardAmountDisplayTypeInMobile', settingName: 'Default Credit Card Amount', mobile: true, desktop: false },
             { settingKey: 'reconciliationStatementButtonDefaultDateRangeTypeInDesktop', settingName: 'Default Date Range for Reconciliation Statement Button', mobile: false, desktop: true },
             { settingKey: 'reconciliationStatementPageDefaultDateRangeTypeInMobile', settingName: 'Default Date Range for Reconciliation Statement Page', mobile: true, desktop: false }
         ]

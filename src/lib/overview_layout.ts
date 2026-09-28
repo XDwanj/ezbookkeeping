@@ -35,8 +35,8 @@ import {
     isArray,
     isString,
     isNumber,
-    isBoolean,
     isInteger,
+    isBoolean,
     isHextualColor,
     normalizeInteger
 } from '@/lib/common.ts';
@@ -110,6 +110,8 @@ function normalizeOverviewWidgetSetting(setting: OverviewWidgetSettingItem, valu
     } else if (setting.settingType === 'color') {
         return isHextualColor(value) ? value.toLowerCase() : undefined;
     } else if (setting.settingType === 'amount') {
+        return isInteger(value) ? value : undefined;
+    } else if (setting.settingType === 'amountFilter') {
         return isString(value) && AmountFilterType.parseTextualFilter(value) ? value : undefined;
     } else if (setting.settingType === 'textbox') {
         return isString(value) ? value : undefined;
@@ -422,7 +424,7 @@ export function parseDesktopOverviewLayout(value: string): DesktopOverviewLayout
 
 export function serializeDesktopOverviewLayout(layout: DesktopOverviewLayout, pretty?: boolean): string {
     const normalized = normalizeDesktopOverviewLayout(layout);
-    return JSON.stringify(normalized, null, pretty ? 2 : undefined);
+    return JSON.stringify(normalized, null, pretty ? 4 : undefined);
 }
 
 export function isDefaultMobileOverviewLayout(layout: MobileOverviewLayout): boolean {

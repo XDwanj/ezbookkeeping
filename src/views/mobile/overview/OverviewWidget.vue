@@ -1,5 +1,5 @@
 <template>
-    <asset-summary-widget :loading="loading" :height="widget.settings['height'] as number"
+    <asset-summary-widget scene="overview" :loading="loading" :height="widget.settings['height'] as number"
                           :light-background-color="widget.settings['lightBackgroundColor'] as ColorValue"
                           :dark-background-color="widget.settings['darkBackgroundColor'] as ColorValue"
                           v-if="widget.type === OverviewWidgetType.AssetSummary" />
@@ -10,6 +10,7 @@
                                  :item-count="widget.settings['itemCount'] as number"
                                  :sort-by="widget.settings['sortBy'] as string"
                                  :always-show-amount="widget.settings['alwaysShowAmount'] as boolean"
+                                 :show-available-credit-for-credit-card="widget.settings['showAvailableCreditForCreditCard'] as boolean"
                                  v-else-if="widget.type === OverviewWidgetType.AccountBalanceList" />
 
     <monthly-expense-overview-widget :loading="loading" :height="widget.settings['height'] as number"
@@ -47,11 +48,15 @@
                                 v-else-if="widget.type === OverviewWidgetType.RecentTransactions" />
 
     <transaction-calendar-widget :loading="loading" :editing="editing"
+                                 :total-amount-type="widget.settings['totalAmountType'] as number"
                                  :transaction-types="widget.settings['transactionTypes'] as number[]"
                                  :show-alternate-date="widget.settings['showAlternateDate'] as boolean"
                                  :show-amount="widget.settings['showAmount'] as boolean"
                                  @navigate="onNavigate"
                                  v-else-if="widget.type === OverviewWidgetType.TransactionCalendar" />
+
+    <add-transaction-button-widget :widget-id="widget.id" @navigate="onNavigate"
+                                   v-else-if="widget.type === OverviewWidgetType.AddTransactionButton" />
 </template>
 
 <script setup lang="ts">
@@ -66,9 +71,14 @@ import PeriodNetIncomeAndSavingsRateWidget from './widgets/PeriodNetIncomeAndSav
 import ExpenseCategoryRankingWidget from './widgets/ExpenseCategoryRankingWidget.vue';
 import RecentTransactionsWidget from './widgets/RecentTransactionsWidget.vue';
 import TransactionCalendarWidget from './widgets/TransactionCalendarWidget.vue';
+import AddTransactionButtonWidget from './widgets/AddTransactionButtonWidget.vue';
 
 import type { ColorValue } from '@/core/color.ts';
-import { type MobileOverviewWidgetLayout, OverviewWidgetType } from '@/core/overview_layout.ts';
+import {
+    type MobileOverviewWidgetLayout,
+    OverviewWidgetType,
+    MobileOverviewWidgetNavigationType
+} from '@/core/overview_layout.ts';
 
 const props = defineProps<{
     widget: MobileOverviewWidgetLayout;
@@ -77,7 +87,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (e: 'navigate', path: string): void;
+    (e: 'navigate', type: MobileOverviewWidgetNavigationType, path?: string): void;
 }>();
 
 const widgetTitle = computed<string>(() => {
@@ -85,8 +95,8 @@ const widgetTitle = computed<string>(() => {
     return typeof title === 'string' ? title.trim() : '';
 });
 
-function onNavigate(path: string): void {
-    emit('navigate', path);
+function onNavigate(type: MobileOverviewWidgetNavigationType, path?: string): void {
+    emit('navigate', type, path);
 }
 </script>
 

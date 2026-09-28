@@ -24,18 +24,20 @@ import { useTransactionCalendarWidgetBase } from '@/views/base/overview/Transact
 import { useEnvironmentsStore } from '@/stores/environment.ts';
 
 import type { TextualYearMonthDay } from '@/core/datetime.ts';
+import { MobileOverviewWidgetNavigationType } from '@/core/overview_layout.ts';
 
 const props = defineProps<{
     loading: boolean;
     editing?: boolean;
     title?: string;
+    totalAmountType?: number;
     transactionTypes: number[];
     showAlternateDate: boolean;
     showAmount: boolean;
 }>();
 
 const emit = defineEmits<{
-    (e: 'navigate', path: string): void;
+    (e: 'navigate', type: MobileOverviewWidgetNavigationType, path?: string): void;
 }>();
 
 const environmentsStore = useEnvironmentsStore();
@@ -58,7 +60,7 @@ function selectDate(date: TextualYearMonthDay): void {
     const url = getTransactionListUrl(date);
 
     if (url) {
-        emit('navigate', url);
+        emit('navigate', MobileOverviewWidgetNavigationType.Url, url);
     }
 }
 </script>

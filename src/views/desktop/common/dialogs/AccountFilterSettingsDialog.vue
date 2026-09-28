@@ -4,7 +4,7 @@
                                   :title="tt(title)" :cancel-button-title="tt('Cancel')"
                                   @cancel="cancel">
             <template #toolbar>
-                <v-text-field class="mx-2" density="compact"
+                <v-text-field class="mx-2" autocomplete="off" density="compact"
                               :disabled="loading || !hasAnyAvailableAccount"
                               :prepend-inner-icon="mdiMagnify"
                               :placeholder="tt('Find account')"
@@ -53,7 +53,8 @@
                 </div>
 
                 <div v-else-if="!loading && hasAnyVisibleAccount">
-                    <v-expansion-panels class="account-categories" multiple v-model="expandAccountCategories">
+                    <v-expansion-panels class="account-categories" multiple v-model="expandAccountCategories"
+                                        @click="focusParentWhenClicked($event, 'v-list', '.v-card-text')">
                         <v-expansion-panel :key="accountCategory.category"
                                            :value="accountCategory.category"
                                            class="border"
@@ -141,6 +142,7 @@ import {
     isAccountOrSubAccountsAllChecked,
     isAccountOrSubAccountsHasButNotAllChecked
 } from '@/lib/account.ts';
+import { focusParentWhenClicked } from '@/lib/ui/desktop.ts';
 
 import {
     mdiMagnify,

@@ -8,7 +8,7 @@
 
             <template #content>
                 <div class="mt-1">
-                    <template :key="setting.settingName" v-for="(setting, index) in supportsSettings">
+                    <template :key="`${setting.settingName}-${index}`" v-for="(setting, index) in supportsSettings">
                         <v-select :class="{ 'mt-4': index > 0 }" item-title="name" item-value="value"
                                   :label="tt(setting.displayName)" :items="getItemCountOptions(setting.itemCountValues)"
                                   :model-value="getSettingValue(setting.settingName)"
@@ -67,17 +67,24 @@
                                   @update:model-value="updateSettingValue(setting, $event)"
                                   v-else-if="setting.settingType === 'customSelect' && (!setting.condition || setting.condition(widget?.settings))" />
 
-                        <v-switch :class="{ 'mt-2': index > 0 && supportsSettings[index - 1]?.settingType !== 'switch' }" :label="tt(setting.displayName)"
+                        <v-switch :class="{ 'mt-2': index > 0 && (supportsSettings[index - 1]?.settingType !== 'switch' || (supportsSettings[index - 1]?.condition && !supportsSettings[index - 1]?.condition?.(widget?.settings))) }"
+                                  :label="tt(setting.displayName)"
                                   :model-value="getSettingValue(setting.settingName)"
                                   @update:model-value="updateSettingValue(setting, $event)"
                                   v-else-if="setting.settingType === 'switch' && (!setting.condition || setting.condition(widget?.settings))" />
 
+                        <amount-input :class="{ 'mt-4': index > 0 }" :label="tt(setting.displayName)"
+                                      :currency="defaultCurrency" :show-currency="false"
+                                      :model-value="getSettingValue(setting.settingName) as number || 0"
+                                      @update:model-value="updateSettingValue(setting, $event)"
+                                      v-else-if="setting.settingType === 'amount' && (!setting.condition || setting.condition(widget?.settings))" />
+
                         <amount-filter-input :class="{ 'mt-4': index > 0 }" :label="tt(setting.displayName)"
                                              :model-value="getSettingValue(setting.settingName) as string || ''"
                                              @update:model-value="updateSettingValue(setting, $event)"
-                                             v-else-if="setting.settingType === 'amount' && (!setting.condition || setting.condition(widget?.settings))" />
+                                             v-else-if="setting.settingType === 'amountFilter' && (!setting.condition || setting.condition(widget?.settings))" />
 
-                        <v-text-field :class="{ 'mt-4': index > 0 }" :label="tt(setting.displayName)"
+                        <v-text-field autocomplete="off" :class="{ 'mt-4': index > 0 }" :label="tt(setting.displayName)"
                                       :placeholder="setting.placeholder ? tt(setting.placeholder) : undefined"
                                       :persistent-placeholder="!!setting.placeholder"
                                       :model-value="getSettingValue(setting.settingName)"
@@ -120,6 +127,7 @@ import { ref, computed, useTemplateRef } from 'vue';
 
 import { useI18n } from '@/locales/helpers.ts';
 
+import { useUserStore } from '@/stores/user.ts';
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
@@ -147,6 +155,7 @@ const {
     getTablePageOptions
 } = useI18n();
 
+const userStore = useUserStore();
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const transactionTagsStore = useTransactionTagsStore();
@@ -164,6 +173,7 @@ const showFilterAccountsDialog = ref<boolean>(false);
 const showFilterTransactionCategoriesDialog = ref<boolean>(false);
 const showFilterTransactionTagsDialog = ref<boolean>(false);
 
+const defaultCurrency = computed<string>(() => userStore.currentUserDefaultCurrency);
 const hasAnyAccount = computed<boolean>(() => accountsStore.allPlainAccounts.length > 0);
 const hasAnyTransactionCategory = computed<boolean>(() => !isObjectEmpty(transactionCategoriesStore.allTransactionCategoriesMap));
 const supportsSettings = computed<OverviewWidgetSettingItem[]>(() => widget.value ? DESKTOP_OVERVIEW_WIDGET_DEFINITIONS[widget.value.type]?.supportsSettings ?? [] : []);

@@ -5,7 +5,7 @@ import { useSettingsStore } from './setting.ts';
 import { useUserStore } from './user.ts';
 import { useAccountsStore } from './account.ts';
 import { useTransactionCategoriesStore } from './transactionCategory.ts';
-import { type TransactionTotalAmount, useTransactionsStore } from './transaction.ts';
+import { type TransactionTotalAmount, type TransactionDailyTotalAmounts, useTransactionsStore } from './transaction.ts';
 import { useExchangeRatesStore } from './exchangeRates.ts';
 
 import { itemAndIndex, entries, keys } from '@/core/base.ts';
@@ -154,7 +154,8 @@ export const useOverviewStore = defineStore('overview', () => {
     const recentTransactions = ref<Record<string, TransactionInfoResponse[]>>({});
     const recentTransactionsStateInvalid = ref<Record<string, boolean>>({});
     const currentMonthTransactions = ref<TransactionInfoResponse[]>([]);
-    const currentMonthTransactionDailyTotalAmounts = ref<Record<string, TransactionTotalAmount>>({});
+    const currentMonthTransactionInflowOutflowDailyTotalAmounts = ref<Record<string, TransactionTotalAmount>>({});
+    const currentMonthTransactionIncomeExpenseDailyTotalAmounts = ref<Record<string, TransactionTotalAmount>>({});
     const currentMonthTransactionsStateInvalid = ref<boolean>(true);
     const transactionDailyAmountsData = ref<TransactionDailyAmountsResponseItem[]>([]);
     const transactionDailyAmountsStateInvalid = ref<boolean>(true);
@@ -315,7 +316,8 @@ export const useOverviewStore = defineStore('overview', () => {
         recentTransactions.value = {};
         recentTransactionsStateInvalid.value = {};
         currentMonthTransactions.value = [];
-        currentMonthTransactionDailyTotalAmounts.value = {};
+        currentMonthTransactionInflowOutflowDailyTotalAmounts.value = {};
+        currentMonthTransactionIncomeExpenseDailyTotalAmounts.value = {};
         currentMonthTransactionsStateInvalid.value = true;
         transactionDailyAmountsData.value = [];
         transactionDailyAmountsStateInvalid.value = true;
@@ -357,9 +359,10 @@ export const useOverviewStore = defineStore('overview', () => {
 
         const excludeAccountIds: string[] = objectFieldWithValueToArrayItem(settingsStore.appSettings.overviewAccountFilterInHomePage, true);
         const excludeCategoryIds: string[] = objectFieldWithValueToArrayItem(settingsStore.appSettings.overviewTransactionCategoryFilterInHomePage, true);
+        const tagFilter: string = settingsStore.appSettings.overviewTransactionTagFilterInHomePage;
 
         return new Promise((resolve, reject) => {
-            services.getTransactionAmounts(requestParams, excludeAccountIds, excludeCategoryIds).then(response => {
+            services.getTransactionAmounts(requestParams, excludeAccountIds, excludeCategoryIds, tagFilter).then(response => {
                 const data = response.data;
 
                 if (!data || !data.success || !data.result) {
@@ -425,7 +428,7 @@ export const useOverviewStore = defineStore('overview', () => {
             services.getTransactionStatistics({
                 startTime: requestDateRange.startTime,
                 endTime: requestDateRange.endTime,
-                tagFilter: '',
+                tagFilter: settingsStore.appSettings.overviewTransactionTagFilterInHomePage,
                 keyword: '',
                 matchMode: KeywordMatchMode.Default.type,
                 useTransactionTimezone: settingsStore.appSettings.timezoneUsedForStatisticsInHomePage === TimezoneTypeForStatistics.TransactionTimezone.type
@@ -655,7 +658,8 @@ export const useOverviewStore = defineStore('overview', () => {
                 endTime: endTime,
                 useTransactionTimezone: settingsStore.appSettings.timezoneUsedForStatisticsInHomePage === TimezoneTypeForStatistics.TransactionTimezone.type,
                 excludeAccountIds: excludeAccountIds,
-                excludeCategoryIds: excludeCategoryIds
+                excludeCategoryIds: excludeCategoryIds,
+                tagFilter: settingsStore.appSettings.overviewTransactionTagFilterInHomePage
             }).then(response => {
                 const data = response.data;
 
@@ -690,16 +694,20 @@ export const useOverviewStore = defineStore('overview', () => {
         });
     }
 
-    function loadCurrentMonthTransactions({ force }: { force: boolean }): Promise<Record<string, TransactionTotalAmount>> {
+    function loadCurrentMonthTransactions({ force }: { force: boolean }): Promise<TransactionDailyTotalAmounts> {
         if (transactionDataRange.value.today.startTime !== getTodayFirstUnixTime()) {
             updateTransactionDateRange();
             currentMonthTransactions.value = [];
-            currentMonthTransactionDailyTotalAmounts.value = {};
+            currentMonthTransactionInflowOutflowDailyTotalAmounts.value = {};
+            currentMonthTransactionIncomeExpenseDailyTotalAmounts.value = {};
             currentMonthTransactionsStateInvalid.value = true;
         }
 
         if (!force && !currentMonthTransactionsStateInvalid.value) {
-            return Promise.resolve(currentMonthTransactionDailyTotalAmounts.value);
+            return Promise.resolve({
+                inflowOutflowDailyTotalAmounts: currentMonthTransactionInflowOutflowDailyTotalAmounts.value,
+                incomeExpenseDailyTotalAmounts: currentMonthTransactionIncomeExpenseDailyTotalAmounts.value
+            });
         }
 
         return new Promise((resolve, reject) => {
@@ -725,7 +733,7 @@ export const useOverviewStore = defineStore('overview', () => {
                     type: 0,
                     categoryIds: categoryIds,
                     accountIds: accountIds,
-                    tagFilter: '',
+                    tagFilter: settingsStore.appSettings.overviewTransactionTagFilterInHomePage,
                     amountFilter: '',
                     keyword: '',
                     matchMode: KeywordMatchMode.Default.type,
@@ -749,9 +757,12 @@ export const useOverviewStore = defineStore('overview', () => {
                     }
 
                     currentMonthTransactions.value = data.result.items;
-                    currentMonthTransactionDailyTotalAmounts.value = transactionsStore.getCurrentMonthTransactionDailyTotalAmounts(currentMonthTransactions.value, accountIds);
 
-                    resolve(currentMonthTransactionDailyTotalAmounts.value);
+                    const dailyTotalAmounts = transactionsStore.getCurrentMonthTransactionDailyTotalAmounts(currentMonthTransactions.value, accountIds);
+                    currentMonthTransactionInflowOutflowDailyTotalAmounts.value = dailyTotalAmounts.inflowOutflowDailyTotalAmounts;
+                    currentMonthTransactionIncomeExpenseDailyTotalAmounts.value = dailyTotalAmounts.incomeExpenseDailyTotalAmounts;
+
+                    resolve(dailyTotalAmounts);
                 }).catch(error => {
                     logger.error('failed to retrieve transaction list', error);
 
@@ -806,6 +817,10 @@ export const useOverviewStore = defineStore('overview', () => {
             querys.push('accountIds=' + getFinalAccountIdsByFilteredAccountIds(accountsStore.allAccountsMap, settingsStore.appSettings.overviewAccountFilterInHomePage));
         }
 
+        if (settingsStore.appSettings.overviewTransactionTagFilterInHomePage) {
+            querys.push('tagFilter=' + encodeURIComponent(settingsStore.appSettings.overviewTransactionTagFilterInHomePage));
+        }
+
         return querys.join('&');
     }
 
@@ -818,7 +833,8 @@ export const useOverviewStore = defineStore('overview', () => {
         transactionCategoryStatisticsData,
         transactionAssetTrendsData,
         recentTransactions,
-        currentMonthTransactionDailyTotalAmounts,
+        currentMonthTransactionInflowOutflowDailyTotalAmounts,
+        currentMonthTransactionIncomeExpenseDailyTotalAmounts,
         currentMonthTransactionsStateInvalid,
         transactionDailyAmountsData,
         // computed states,
