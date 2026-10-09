@@ -17,7 +17,12 @@ Docker Hub 账号。上游 `Build Snapshot` 自动构建流程已移除，避免
 | 推送正式版本标签，如 `v1.2.3` | `1.2.3`、`1.2`、`latest`、`sha-<短提交号>` |
 | Actions → Run workflow | 所选分支或版本对应的标签；非默认分支不覆盖 `latest-snapshot` |
 
-预发布版本只生成对应预发布版本标签及提交标签，不覆盖 `latest`。
+每次构建还会生成北京时间（`Asia/Shanghai`）的时间标签，格式为
+`YYYYMMDDHHmm`（年月日时分），例如 `202610091412`，可通过
+`ghcr.io/xdwanj/ezbookkeeping:202610091412` 拉取指定构建。
+时间取工作流设置构建变量时的时间；同一分钟内重复构建会覆盖同名时间标签。
+
+预发布版本生成对应预发布版本标签、提交标签和时间标签，不覆盖 `latest`。
 镜像仓库名称自动取当前仓库的小写形式：本 fork 为
 `ghcr.io/xdwanj/ezbookkeeping`。构建复用现有 Dockerfile 和 Bake 配置，当前
 GHCR 发布仅支持 `linux/amd64`（x86-64），使用 x86 runner 原生编译，不使用
