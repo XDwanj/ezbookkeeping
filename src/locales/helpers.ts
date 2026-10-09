@@ -1,3 +1,4 @@
+import { reactive } from 'vue';
 import { useI18n as useVueI18n } from 'vue-i18n';
 import moment from 'moment-timezone';
 
@@ -109,6 +110,8 @@ import {
 } from '@/core/fiscalyear.ts';
 
 import {
+    type Coordinate,
+    type CoordinateFormatOptions,
     CoordinateDisplayType
 } from '@/core/coordinate.ts';
 
@@ -210,6 +213,7 @@ import type { LatestExchangeRateResponse, LocalizedLatestExchangeRate } from '@/
 import {
     isDefined,
     isObject,
+    isArray,
     isString,
     isNumber,
     isBoolean
@@ -271,14 +275,22 @@ import {
 } from '@/lib/currency.ts';
 
 import {
+    formatCoordinate
+} from '@/lib/coordinate.ts';
+
+import {
     getCategorizedAccountsMap,
     getAllFilteredAccountsBalance
 } from '@/lib/account.ts';
 
 import {
     getSessionCurrentLanguageKey,
-    setSessionCurrentLanguageKey
+    setSessionCurrentLanguageKey,
+    getSessionLanguagePreview,
+    setSessionLanguagePreview
 } from '@/lib/settings.ts';
+
+import { isLanguagePreviewEnabled } from '@/lib/server_settings.ts';
 
 import services from '@/lib/services.ts';
 import logger from '@/lib/logger.ts';
@@ -286,6 +298,11 @@ import logger from '@/lib/logger.ts';
 import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserStore } from '@/stores/user.ts';
 import { useExchangeRatesStore } from '@/stores/exchangeRates.ts';
+
+
+interface PreviewLanguageMessages {
+    [key: string]: string | PreviewLanguageMessages;
+}
 
 export interface LocalizedErrorParameter {
     readonly key: string;
@@ -296,6 +313,32 @@ export interface LocalizedErrorParameter {
 export interface LocalizedError {
     readonly message: string;
     readonly parameters?: LocalizedErrorParameter[];
+}
+
+const allLanguageActualRtlSetting = reactive<Record<string, boolean>>({});
+const previewedLanguages = reactive<Record<string, boolean>>({});
+
+function parsePreviewMessages(json: string): PreviewLanguageMessages {
+    const value: unknown = JSON.parse(json.replace(/^\uFEFF/, ''));
+
+    function validate(value: unknown, path: string): asserts value is PreviewLanguageMessages {
+        if (!value || !isObject(value) || isArray(value)) {
+            throw new Error(`${path} must be a JSON object containing strings or nested objects.`);
+        }
+
+        for (const [key, message] of entries(value)) {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+                throw new Error(`Unsupported message key: ${path}.${key}`);
+            }
+
+            if (!isString(message)) {
+                validate(message, `${path}.${key}`);
+            }
+        }
+    }
+
+    validate(value, 'Language configuration');
+    return value;
 }
 
 export function getI18nOptions(): object {
@@ -309,6 +352,22 @@ export function getI18nOptions(): object {
 
             for (const [languageKey, languageInfo] of entries(ALL_LANGUAGES)) {
                 messages[languageKey] = languageInfo.content;
+
+                if (!isLanguagePreviewEnabled()) {
+                    continue;
+                }
+
+                const preview = getSessionLanguagePreview(languageKey);
+
+                if (preview && preview.data && preview.textDirection) {
+                    try {
+                        messages[languageKey] = parsePreviewMessages(preview.data);
+                        allLanguageActualRtlSetting[languageKey] = preview.textDirection === TextDirection.RTL;
+                        previewedLanguages[languageKey] = true;
+                    } catch (ex) {
+                        logger.warn(`failed to restore language preview for ${languageKey}`, ex);
+                    }
+                }
             }
 
             return messages;
@@ -317,19 +376,17 @@ export function getI18nOptions(): object {
 }
 
 export function getRtlLocales(): Record<string, boolean> {
-    const rtlLocales: Record<string, boolean> = {};
-
     for (const [languageKey, languageInfo] of entries(ALL_LANGUAGES)) {
-        if (languageInfo.textDirection === 'rtl') {
-            rtlLocales[languageKey] = true;
+        if (!isDefined(allLanguageActualRtlSetting[languageKey])) {
+            allLanguageActualRtlSetting[languageKey] = languageInfo.textDirection === 'rtl';
         }
     }
 
-    return rtlLocales;
+    return allLanguageActualRtlSetting;
 }
 
 export function useI18n() {
-    const { t, locale } = useVueI18n();
+    const { t, locale, getLocaleMessage, setLocaleMessage } = useVueI18n();
 
     const settingsStore = useSettingsStore();
     const userStore = useUserStore();
@@ -1023,6 +1080,10 @@ export function useI18n() {
         } else {
             return TextDirection.LTR;
         }
+    }
+
+    function getCurrentLanguageMessagesJson(): string {
+        return JSON.stringify(getLocaleMessage(locale.value), null, 4);
     }
 
     function getDefaultCurrency(): string {
@@ -1720,7 +1781,13 @@ export function useI18n() {
     }
 
     function getLanguageInfo(languageKey: string): LanguageInfo | undefined {
-        return ALL_LANGUAGES[languageKey];
+        const languageInfo = ALL_LANGUAGES[languageKey];
+
+        if (languageInfo && previewedLanguages[languageKey]) {
+            return { ...languageInfo, textDirection: allLanguageActualRtlSetting[languageKey] ? 'rtl' : 'ltr' };
+        }
+
+        return languageInfo;
     }
 
     function getMonthShortName(monthName: string): string {
@@ -2474,6 +2541,24 @@ export function useI18n() {
         return pageOptions;
     }
 
+    function getFormattedCoordinate(value: Coordinate, coordinateDisplayType?: CoordinateDisplayType): string {
+        if (!coordinateDisplayType) {
+            coordinateDisplayType = CoordinateDisplayType.valueOf(userStore.currentUserCoordinateDisplayType) ?? CoordinateDisplayType.Default;
+        }
+
+        const numberFormatOptions = getNumberFormatOptions({
+            digitGrouping: DigitGroupingType.None,
+            numeralSystem: NumeralSystem.WesternArabicNumerals
+        });
+
+        const options: CoordinateFormatOptions = {
+            coordinateDisplayType: coordinateDisplayType,
+            numberFormatOptions: numberFormatOptions
+        };
+
+        return formatCoordinate(value, options);
+    }
+
     function getLocalizedFileEncodingName(encoding: string): string {
         return t(`encoding.${encoding}`);
     }
@@ -2598,6 +2683,36 @@ export function useI18n() {
         return localeDefaultSettings;
     }
 
+    function hasPreviewedConfiguration(languageKey: string): boolean {
+        return !!previewedLanguages[languageKey];
+    }
+
+    function previewLanguage(json: string, textDirection: TextDirection): void {
+        const messages: PreviewLanguageMessages = parsePreviewMessages(json);
+        setSessionLanguagePreview(locale.value, {
+            data: json,
+            textDirection: textDirection
+        });
+        setLocaleMessage(locale.value, messages);
+        allLanguageActualRtlSetting[locale.value] = textDirection === TextDirection.RTL;
+        previewedLanguages[locale.value] = true;
+        settingsStore.updateLocalizedDefaultSettings(setLanguage(locale.value, true));
+    }
+
+    function restoreLanguagePreview(): void {
+        const languageInfo = ALL_LANGUAGES[locale.value];
+
+        if (!languageInfo) {
+            return;
+        }
+
+        setSessionLanguagePreview(locale.value, null);
+        setLocaleMessage(locale.value, JSON.parse(JSON.stringify(languageInfo.content)));
+        allLanguageActualRtlSetting[locale.value] = languageInfo.textDirection === 'rtl';
+        delete previewedLanguages[locale.value];
+        settingsStore.updateLocalizedDefaultSettings(setLanguage(locale.value, true));
+    }
+
     function setTimeZone(timezone: string): void {
         if (timezone) {
             moment.tz.setDefault(timezone);
@@ -2645,6 +2760,7 @@ export function useI18n() {
         getCurrentLanguageInfo,
         getCurrentLanguageDisplayName,
         getCurrentLanguageTextDirection,
+        getCurrentLanguageMessagesJson,
         // get localization default type
         getDefaultCurrency,
         getDefaultFirstDayOfWeek,
@@ -2801,6 +2917,7 @@ export function useI18n() {
         formatBigDecimalToWesternArabicNumeralsWithoutDigitGrouping: (value: BigDecimal, precision?: number) => getFormattedBigDecimal(value, NumeralSystem.WesternArabicNumerals, DigitGroupingType.None, precision),
         formatNumberToLocalizedNumerals: (value: number, precision?: number) => getFormattedNumber(value, undefined, undefined, precision),
         formatNumberToLocalizedNumeralsWithoutDigitGrouping: (value: number, precision?: number) => getFormattedNumber(value, undefined, DigitGroupingType.None, precision),
+        formatNumberToWesternArabicNumeralsWithoutDigitGrouping: (value: number, precision?: number) => getFormattedNumber(value, NumeralSystem.WesternArabicNumerals, DigitGroupingType.None, precision),
         formatPercentToLocalizedNumerals: (value: number, precision: number, lowPrecisionValue: string) => getFormattedPercentValue(value, precision, lowPrecisionValue),
         formatPercentToWesternArabicNumerals: (value: number, precision: number, lowPrecisionValue: string) => getFormattedPercentValue(value, precision, lowPrecisionValue, NumeralSystem.WesternArabicNumerals),
         formatChartValueToLocalizedNumerals: getFormattedChartValue,
@@ -2812,11 +2929,15 @@ export function useI18n() {
         getCategorizedAccountsWithDisplayBalance,
         getTablePageOptions,
         // other format functions
+        formatCoordinate: (value: Coordinate) => getFormattedCoordinate(value),
         getLocalizedFileEncodingName,
         getLocalizedOAuth2ProviderName,
         getLocalizedOAuth2LoginText,
         // localization setting functions
         setLanguage,
+        hasPreviewedConfiguration,
+        previewLanguage,
+        restoreLanguagePreview,
         setTimeZone,
         initLocale
     };

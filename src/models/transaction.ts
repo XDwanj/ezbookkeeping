@@ -20,7 +20,7 @@ export class Transaction implements TransactionInfoResponse {
     public incomeCategoryId: string = '';
     public transferCategoryId: string = '';
     public time: number;
-    public timeZone?: string; // only in new transaction
+    public timeZone?: string; // only in new transaction or scheduled transaction
     public utcOffset: number;
     public sourceAccountId: string;
     public destinationAccountId: string;
@@ -806,6 +806,19 @@ export interface TransactionReconciliationStatementResponse {
     readonly closingBalance: string;
 }
 
+export interface TransactionUnreconciledCountRequest {
+    readonly accountIds: string[];
+}
+
+export interface TransactionUnreconciledCountItem {
+    readonly accountId: string;
+    readonly count: number;
+}
+
+export interface TransactionUnreconciledCountResponse {
+    readonly items: TransactionUnreconciledCountItem[];
+}
+
 export interface TransactionReconciliationStatementResponseItemWithInfo extends TransactionReconciliationStatementResponseItem {
     readonly sourceAccount?: Account;
     readonly sourceAccountName: string;
@@ -1020,6 +1033,10 @@ export interface TransactionInsightDataItem extends TransactionInfoResponse {
     readonly tags: TransactionTagInfoResponse[];
     readonly comment: string;
     readonly geoLocation?: TransactionGeoLocationResponse;
+}
+
+export interface TransactionInsightDataItemWithQueryIndexes extends TransactionInsightDataItem {
+    readonly queryIndexes: number[];
 }
 
 export type TransactionAmountsResponse = PartialRecord<TransactionAmountsRequestType, TransactionAmountsResponseItem>;

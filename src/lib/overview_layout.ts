@@ -1,8 +1,9 @@
-import { type PartialRecord, entries, keys } from '@/core/base.ts';
+import { type PartialRecord, entries } from '@/core/base.ts';
 import {
     type OverviewWidgetSettingValue,
     type OverviewWidgetSettingItem,
     type OverviewWidgetDefinitionBase,
+    type OverviewWidgetSettingContext,
     type OverviewRecentTransactionsQuery,
     type OverviewLayoutBase,
     type OverviewWidgetLayoutBase,
@@ -38,8 +39,14 @@ import {
     isInteger,
     isBoolean,
     isHextualColor,
-    normalizeInteger
+    normalizeInteger,
+    objectFieldToArrayItem
 } from '@/lib/common.ts';
+
+import {
+    isTransactionFromAITextRecognitionEnabled,
+    isTransactionFromAIImageRecognitionEnabled
+} from '@/lib/server_settings.ts';
 
 function normalizeOverviewWidgetSettings(definition: OverviewWidgetDefinitionBase, settings: unknown): Record<string, OverviewWidgetSettingValue> {
     const normalized = { ...definition.defaultSettings };
@@ -150,9 +157,8 @@ export function cloneWidget<T extends OverviewWidgetLayoutBase>(widget: T): T {
     return { ...widget, settings };
 }
 
-export function getOverviewDataRequirements(layout: OverviewLayoutBase, definitions: PartialRecord<OverviewWidgetType, OverviewWidgetDefinitionBase>): OverviewWidgetDataRequirement[] {
-    const requirements: Record<string, boolean> = {};
-    const result: OverviewWidgetDataRequirement[] = [];
+export function getOverviewDataRequirements(layout: OverviewLayoutBase, definitions: PartialRecord<OverviewWidgetType, OverviewWidgetDefinitionBase>): PartialRecord<OverviewWidgetDataRequirement, boolean> {
+    const requirements: PartialRecord<OverviewWidgetDataRequirement, boolean> = {};
 
     for (const widget of layout.widgets) {
         const definition = definitions[widget.type];
@@ -174,13 +180,14 @@ export function getOverviewDataRequirements(layout: OverviewLayoutBase, definiti
         requirements[OverviewWidgetDataRequirement.TransactionOverview] = true;
     }
 
-    for (const requirement of keys(requirements)) {
-        if (requirements[requirement]) {
-            result.push(requirement as OverviewWidgetDataRequirement);
-        }
-    }
+    return requirements;
+}
 
-    return result;
+export function getOverviewWidgetSettingContext(): OverviewWidgetSettingContext {
+    return {
+        aiTextRecognitionEnabled: isTransactionFromAITextRecognitionEnabled(),
+        aiImageRecognitionEnabled: isTransactionFromAIImageRecognitionEnabled()
+    };
 }
 
 export function getOverviewTransactionOverviewMonths(layout: OverviewLayoutBase): number {
@@ -199,6 +206,28 @@ export function getOverviewTransactionOverviewMonths(layout: OverviewLayoutBase)
     }
 
     return months;
+}
+
+export function getOverviewUnreconciledTransactionAccountIds(layout: OverviewLayoutBase): string[] {
+    const accountIds: Record<string, boolean> = {};
+
+    for (const widget of layout.widgets) {
+        if (widget.type !== OverviewWidgetType.AccountUnreconciledTransactions) {
+            continue;
+        }
+
+        const widgetAccountIds = widget.settings['accountIds'];
+
+        if (!isArray(widgetAccountIds) || !widgetAccountIds.length) {
+            return [];
+        }
+
+        for (const accountId of widgetAccountIds as string[]) {
+            accountIds[accountId] = true;
+        }
+    }
+
+    return objectFieldToArrayItem(accountIds);
 }
 
 export function getOverviewRecentTransactionsQuery(settings: Record<string, OverviewWidgetSettingValue>): OverviewRecentTransactionsQuery {

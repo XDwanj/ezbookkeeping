@@ -83,6 +83,8 @@ import type {
     TransactionInfoPageWrapperResponse2,
     TransactionReconciliationStatementRequest,
     TransactionReconciliationStatementResponse,
+    TransactionUnreconciledCountRequest,
+    TransactionUnreconciledCountResponse,
     TransactionStatisticRequest,
     TransactionStatisticResponse,
     TransactionStatisticTrendsRequest,
@@ -179,7 +181,9 @@ import type {
     UserApplicationCloudSettingsUpdateRequest
 } from '@/models/user_app_cloud_setting.ts';
 import type {
-    RecognizedTransactionResponse
+    RecognizedTransactionResponse,
+    CodingAssistantRequest,
+    CodingAssistantResponse
 } from '@/models/large_language_model.ts';
 import type {
     UserCustomIconInfoResponse,
@@ -547,6 +551,9 @@ export default {
     getReconciliationStatements: (req: TransactionReconciliationStatementRequest): ApiResponsePromise<TransactionReconciliationStatementResponse> => {
         return axios.get<ApiResponse<TransactionReconciliationStatementResponse>>(`v1/transactions/reconciliation_statements.json?account_id=${req.accountId}&start_time=${req.startTime}&end_time=${req.endTime}`);
     },
+    getUnreconciledTransactionCounts: (req: TransactionUnreconciledCountRequest): ApiResponsePromise<TransactionUnreconciledCountResponse> => {
+        return axios.get<ApiResponse<TransactionUnreconciledCountResponse>>(`v1/transactions/unreconciled_transaction_counts.json?account_ids=${req.accountIds.join(',')}`);
+    },
     getTransactionStatistics: (req: TransactionStatisticRequest): ApiResponsePromise<TransactionStatisticResponse> => {
         const queryParams: string[] = [];
 
@@ -896,6 +903,12 @@ export default {
         return axios.postForm<ApiResponse<RecognizedTransactionResponse>>('v1/llm/transactions/recognize_receipt_image.json', {
             image: imageFile
         }, {
+            timeout: DEFAULT_LLM_API_TIMEOUT,
+            cancelableUuid: cancelableUuid
+        } as ApiRequestConfig);
+    },
+    generateCode: (req: CodingAssistantRequest, cancelableUuid?: string): ApiResponsePromise<CodingAssistantResponse> => {
+        return axios.post<ApiResponse<CodingAssistantResponse>>('v1/llm/code/generate.json', req, {
             timeout: DEFAULT_LLM_API_TIMEOUT,
             cancelableUuid: cancelableUuid
         } as ApiRequestConfig);

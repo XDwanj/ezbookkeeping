@@ -15,7 +15,7 @@
                        :aria-label="tt('AI Clipboard Text Recognition')" :disabled="loading || submitting || recognizing"
                        v-if="mode !== TransactionEditPageMode.View && type === TransactionEditPageType.Transaction && activeTab === 'basicInfo' && isTransactionFromAITextRecognitionEnabled()"
                        @click="recognizeFromClipboard">
-                    <v-icon :icon="mdiMagicStaff" size="22" v-if="!recognizing"/>
+                    <v-icon :icon="mdiMagicStaff" size="20" v-if="!recognizing"/>
                     <v-tooltip activator="parent">{{ tt('AI Clipboard Text Recognition') }}</v-tooltip>
                     <v-progress-circular indeterminate size="22" v-if="recognizing"></v-progress-circular>
                 </v-btn>
@@ -294,7 +294,7 @@
                                         :readonly="mode === TransactionEditPageMode.View"
                                         :disabled="loading || submitting || recognizing || (mode === TransactionEditPageMode.Edit && transaction.type === TransactionType.ModifyBalance)"
                                         :label="tt('Transaction Timezone')"
-                                        :placeholder="!transaction.timeZone && transaction.timeZone !== '' ? `(${transactionDisplayTimezone}) ${transactionTimezoneTimeDifference}` : tt('Timezone')"
+                                        :placeholder="!transaction.timeZone && transaction.timeZone !== '' ? `(${transactionDisplayTimezone}) ${type === TransactionEditPageType.Transaction ? transactionTimezoneTimeDifference : ''}` : tt('Timezone')"
                                         :items="allTimezones"
                                         :no-data-text="tt('No results')"
                                         :model-value="transaction.timeZone"
@@ -329,7 +329,7 @@
                                         v-model:menu="geoMenuState"
                                     >
                                         <template #selection>
-                                            <span class="cursor-pointer" v-if="transaction.geoLocation">{{ `(${formatCoordinate(transaction.geoLocation, coordinateDisplayType)})` }}</span>
+                                            <span class="cursor-pointer" v-if="transaction.geoLocation">{{ `(${formatCoordinate(transaction.geoLocation)})` }}</span>
                                             <span class="cursor-pointer" v-else-if="!transaction.geoLocation">{{ geoLocationStatusInfo }}</span>
                                         </template>
 
@@ -546,7 +546,6 @@ import {
     getTimezoneOffsetMinutes,
     getCurrentUnixTime
 } from '@/lib/datetime.ts';
-import { formatCoordinate } from '@/lib/coordinate.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
 import {
     getTransactionPrimaryCategoryName,
@@ -604,7 +603,7 @@ const props = defineProps<{
     show?: boolean;
 }>();
 
-const { tt } = useI18n();
+const { tt, formatCoordinate } = useI18n();
 
 const {
     mode,
@@ -622,7 +621,6 @@ const {
     setGeoLocationByClickMap,
     transaction,
     defaultCurrency,
-    coordinateDisplayType,
     imageUploadQualityType,
     allTimezones,
     allVisibleAccounts,
