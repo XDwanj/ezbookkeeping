@@ -21,6 +21,11 @@ type mcpQueryAllTransactionCategoriesToolHandler struct{}
 
 var MCPQueryAllTransactionCategoriesToolHandler = &mcpQueryAllTransactionCategoriesToolHandler{}
 
+// ToolType returns the MCP tool type
+func (h *mcpQueryAllTransactionCategoriesToolHandler) ToolType() core.MCPToolType {
+	return core.MCP_TOOL_TYPE_QUERY_ALL_TRANSACTION_CATEGORIES
+}
+
 // Name returns the name of the MCP tool
 func (h *mcpQueryAllTransactionCategoriesToolHandler) Name() string {
 	return "query_all_transaction_categories"
@@ -29,6 +34,21 @@ func (h *mcpQueryAllTransactionCategoriesToolHandler) Name() string {
 // Description returns the description of the MCP tool
 func (h *mcpQueryAllTransactionCategoriesToolHandler) Description() string {
 	return "Query all transaction categories for the current user in ezBookkeeping."
+}
+
+// DataOperationType returns how the MCP tool operates on business records
+func (h *mcpQueryAllTransactionCategoriesToolHandler) DataOperationType() MCPToolDataOperationType {
+	return MCP_TOOL_DATA_OPERATION_READ_ONLY
+}
+
+// IsIdempotent returns whether repeated calls with the same arguments have no additional effects
+func (h *mcpQueryAllTransactionCategoriesToolHandler) IsIdempotent() bool {
+	return true
+}
+
+// DependsOnExternalData returns whether the MCP tool may depend on third-party data
+func (h *mcpQueryAllTransactionCategoriesToolHandler) DependsOnExternalData() bool {
+	return false
 }
 
 // InputType returns the input type for the MCP tool request

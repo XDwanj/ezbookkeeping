@@ -21,6 +21,8 @@ import {
     DEFAULT_RECONCILIATION_STATEMENT_DATE_RANGE_IN_MOBILE,
 } from './statistics.ts';
 import { DEFAULT_TRANSACTION_EXPLORER_DATE_RANGE } from './explorer.ts';
+
+import { PresetAmountColor } from '@/core/color.ts';
 import { DEFAULT_CURRENCY_CODE } from '@/consts/currency.ts';
 
 export type ApplicationSettingKey = string;
@@ -64,10 +66,12 @@ export interface ApplicationSettings extends BaseApplicationSetting {
     showTotalAmountInTransactionListPage: boolean;
     totalAmountTypeInTransactionListPage: number;
     showTagInTransactionListPage: boolean;
+    showPictureIndicatorInTransactionListPage: boolean;
     defaultKeywordMatchModeInTransactionListPage: number;
     // Transaction Edit Page
     autoSaveTransactionDraft: string;
     autoGetCurrentGeoLocation: boolean;
+    showSelectedTagsOnTopInMobile: boolean;
     alwaysShowTransactionPicturesInMobileTransactionEditPage: boolean;
     transactionPictureQuality: number;
     // AI Clipboard Text Recognition
@@ -90,6 +94,7 @@ export interface ApplicationSettings extends BaseApplicationSetting {
     currencySortByInExchangeRatesPage: number;
     // Browser Cache Management
     mapCacheExpiration: number,
+    transactionPictureCacheExpiration: number,
     exchangeRatesDataCacheExpiration: number,
     // Statistics Settings
     statistics: {
@@ -123,6 +128,8 @@ export interface ApplicationCloudSetting {
 export interface LocaleDefaultSettings {
     currency: string;
     firstDayOfWeek: WeekDayValue;
+    preferredExpenseAmountColor: PresetAmountColor;
+    preferredIncomeAmountColor: PresetAmountColor;
 }
 
 export interface ApplicationLockState {
@@ -155,12 +162,14 @@ export const ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES: Record<string, UserAp
     'showTotalAmountInTransactionListPage': UserApplicationCloudSettingType.Boolean,
     'totalAmountTypeInTransactionListPage': UserApplicationCloudSettingType.Number,
     'showTagInTransactionListPage': UserApplicationCloudSettingType.Boolean,
+    'showPictureIndicatorInTransactionListPage': UserApplicationCloudSettingType.Boolean,
     'defaultKeywordMatchModeInTransactionListPage': UserApplicationCloudSettingType.Number,
     // Transaction Edit Page
     'quickSaveButtonStyleInMobileTransactionListPage': UserApplicationCloudSettingType.Number,
     'quickAddButtonActionInMobileTransactionEditPage': UserApplicationCloudSettingType.Number,
     'autoSaveTransactionDraft': UserApplicationCloudSettingType.String,
     'autoGetCurrentGeoLocation': UserApplicationCloudSettingType.Boolean,
+    'showSelectedTagsOnTopInMobile': UserApplicationCloudSettingType.Boolean,
     'alwaysShowTransactionPicturesInMobileTransactionEditPage': UserApplicationCloudSettingType.Boolean,
     'transactionPictureQuality': UserApplicationCloudSettingType.Number,
     // AI Clipboard Text Recognition
@@ -183,6 +192,7 @@ export const ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES: Record<string, UserAp
     'currencySortByInExchangeRatesPage': UserApplicationCloudSettingType.Number,
     // Browser Cache Management
     'mapCacheExpiration': UserApplicationCloudSettingType.Number,
+    'transactionPictureCacheExpiration': UserApplicationCloudSettingType.Number,
     'exchangeRatesDataCacheExpiration': UserApplicationCloudSettingType.Number,
     // Statistics Settings
     'statistics.defaultChartDataType': UserApplicationCloudSettingType.Number,
@@ -230,12 +240,14 @@ export const DEFAULT_APPLICATION_SETTINGS: ApplicationSettings = {
     showTotalAmountInTransactionListPage: true,
     totalAmountTypeInTransactionListPage: TransactionAmountType.InflowsAndOutflows,
     showTagInTransactionListPage: true,
+    showPictureIndicatorInTransactionListPage: false,
     defaultKeywordMatchModeInTransactionListPage: KeywordMatchMode.Default.type,
     // Transaction Edit Page
     quickSaveButtonStyleInMobileTransactionListPage: TransactionQuickSaveButtonStyle.Default.type,
     quickAddButtonActionInMobileTransactionEditPage: TransactionQuickAddButtonActionType.Default.type,
     autoSaveTransactionDraft: 'disabled',
     autoGetCurrentGeoLocation: false,
+    showSelectedTagsOnTopInMobile: false,
     alwaysShowTransactionPicturesInMobileTransactionEditPage: false,
     transactionPictureQuality: ImageUploadQualityType.Default.type,
     // AI Clipboard Text Recognition
@@ -258,6 +270,7 @@ export const DEFAULT_APPLICATION_SETTINGS: ApplicationSettings = {
     currencySortByInExchangeRatesPage: CurrencySortingType.Default.type,
     // Browser Cache Management
     mapCacheExpiration: -1,
+    transactionPictureCacheExpiration: 2592000,
     exchangeRatesDataCacheExpiration: 0,
     // Statistics Settings
     statistics: {
@@ -278,5 +291,7 @@ export const DEFAULT_APPLICATION_SETTINGS: ApplicationSettings = {
 
 export const DEFAULT_LOCALE_SETTINGS: LocaleDefaultSettings = {
     currency: DEFAULT_CURRENCY_CODE,
-    firstDayOfWeek: WeekDay.DefaultFirstDay.type
+    firstDayOfWeek: WeekDay.DefaultFirstDay.type,
+    preferredExpenseAmountColor: PresetAmountColor.DefaultExpenseColor,
+    preferredIncomeAmountColor: PresetAmountColor.DefaultIncomeColor
 };

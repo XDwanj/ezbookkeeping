@@ -36,6 +36,11 @@ type mcpQueryLatestExchangeRatesToolHandler struct{}
 
 var MCPQueryLatestExchangeRatesToolHandler = &mcpQueryLatestExchangeRatesToolHandler{}
 
+// ToolType returns the MCP tool type
+func (h *mcpQueryLatestExchangeRatesToolHandler) ToolType() core.MCPToolType {
+	return core.MCP_TOOL_TYPE_QUERY_LATEST_EXCHANGE_RATES
+}
+
 // Name returns the name of the MCP tool
 func (h *mcpQueryLatestExchangeRatesToolHandler) Name() string {
 	return "query_latest_exchange_rates"
@@ -44,6 +49,21 @@ func (h *mcpQueryLatestExchangeRatesToolHandler) Name() string {
 // Description returns the description of the MCP tool
 func (h *mcpQueryLatestExchangeRatesToolHandler) Description() string {
 	return "Query latest exchange rates with specified currencies."
+}
+
+// DataOperationType returns how the MCP tool operates on business records
+func (h *mcpQueryLatestExchangeRatesToolHandler) DataOperationType() MCPToolDataOperationType {
+	return MCP_TOOL_DATA_OPERATION_READ_ONLY
+}
+
+// IsIdempotent returns whether repeated calls with the same arguments have no additional effects
+func (h *mcpQueryLatestExchangeRatesToolHandler) IsIdempotent() bool {
+	return true
+}
+
+// DependsOnExternalData returns whether the MCP tool may depend on third-party data
+func (h *mcpQueryLatestExchangeRatesToolHandler) DependsOnExternalData() bool {
+	return true
 }
 
 // InputType returns the input type for the MCP tool request

@@ -603,9 +603,19 @@ export interface TransactionBatchDeleteRequest {
     readonly password: string;
 }
 
+export interface TransactionCreateBatchRequest {
+    readonly transactions: TransactionCreateRequest[];
+}
+
 export interface TransactionImportRequest {
     readonly transactions: TransactionCreateRequest[];
     readonly clientSessionId: string;
+}
+
+export interface TransactionImportResponse {
+    readonly finished: boolean;
+    readonly importedCount: number;
+    readonly totalCount: number;
 }
 
 export interface TransactionListByMaxTimeRequest {

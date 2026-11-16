@@ -188,7 +188,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.AvatarProvider == core.USER_AVATAR_PROVIDER_INTERNAL {
 		avatarRoute := router.Group("/avatar")
-		avatarRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
+		avatarRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByQueryString(config, core.NormalTokenScopeUserAvatar), config))
 		{
 			avatarRoute.GET("/:fileName", bindImage(api.Users.UserGetAvatarHandler, config))
 		}
@@ -196,7 +196,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.EnableTransactionPictures {
 		pictureRoute := router.Group("/pictures")
-		pictureRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
+		pictureRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByQueryString(config, core.NormalTokenScopeTransactionPicture), config))
 		{
 			pictureRoute.GET("/:fileName", bindImage(api.TransactionPictures.TransactionPictureGetHandler, config))
 		}
@@ -204,7 +204,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.EnableUserCustomIcon {
 		customIconRoute := router.Group("/icons")
-		customIconRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
+		customIconRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByQueryString(config, core.NormalTokenScopeUserCustomIcon), config))
 		{
 			customIconRoute.GET("/:fileName", bindImage(api.UserCustomIcons.CustomIconGetHandler, config))
 		}
@@ -213,20 +213,10 @@ func startWebServer(c *core.CliContext) error {
 	router.GET("/healthz.json", bindApi(api.Healths.HealthStatusHandler, config))
 
 	proxyRoute := router.Group("/proxy")
-	proxyRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByQueryString(config), config))
+	proxyRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByQueryString(config, core.NormalTokenScopeMapProxy), config))
 	{
-		if config.EnableMapDataFetchProxy {
-			if config.MapProvider == settings.OpenStreetMapProvider ||
-				config.MapProvider == settings.OpenStreetMapHumanitarianStyleProvider ||
-				config.MapProvider == settings.OpenTopoMapProvider ||
-				config.MapProvider == settings.OPNVKarteMapProvider ||
-				config.MapProvider == settings.CyclOSMMapProvider ||
-				config.MapProvider == settings.CartoDBMapProvider ||
-				config.MapProvider == settings.TomTomMapProvider ||
-				config.MapProvider == settings.TianDiTuProvider ||
-				config.MapProvider == settings.CustomProvider {
-				proxyRoute.GET("/map/tile/:zoomLevel/:coordinateX/:fileName", bindProxy(api.MapImages.MapTileImageProxyHandler, config))
-			}
+		if config.EnableMapDataFetchProxy && config.SupportMapDataFetchProxy {
+			proxyRoute.GET("/map/tile/:zoomLevel/:coordinateX/:fileName", bindProxy(api.MapImages.MapTileImageProxyHandler, config))
 
 			if config.MapProvider == settings.TianDiTuProvider ||
 				(config.MapProvider == settings.CustomProvider && config.CustomMapTileServerAnnotationLayerUrl != "") {
@@ -237,7 +227,7 @@ func startWebServer(c *core.CliContext) error {
 
 	if config.MapProvider == settings.AmapProvider && config.AmapSecurityVerificationMethod == settings.AmapSecurityVerificationInternalProxyMethod {
 		amapApiProxyRoute := router.Group("/_AMapService")
-		amapApiProxyRoute.Use(bindMiddleware(middlewares.JWTAuthorizationByCookie(config), config))
+		amapApiProxyRoute.Use(bindMiddleware(middlewares.TokenAuthorizationByCookie(config, core.NormalTokenScopeMapProxy), config))
 		{
 			amapApiProxyRoute.GET("/*action", bindProxy(api.AmapApis.AmapApiProxyHandler, config))
 		}
@@ -255,7 +245,7 @@ func startWebServer(c *core.CliContext) error {
 		mcpRoute.Use(bindMiddleware(middlewares.RequestId(config), config))
 		mcpRoute.Use(bindMiddleware(middlewares.RequestLog, config))
 		mcpRoute.Use(bindMiddleware(middlewares.MCPServerIpLimit(config), config))
-		mcpRoute.Use(bindMiddleware(middlewares.JWTMCPAuthorization(config), config))
+		mcpRoute.Use(bindMiddleware(middlewares.TokenMCPAuthorization(config), config))
 		{
 			mcpRoute.POST("", bindJSONRPCApi(map[string]core.JSONRPCApiHandlerFunc{
 				"initialize":     api.ModelContextProtocols.InitializeHandler,
@@ -292,7 +282,7 @@ func startWebServer(c *core.CliContext) error {
 
 		if config.EnableInternalAuth && config.EnableTwoFactor {
 			twoFactorRoute := apiRoute.Group("/2fa")
-			twoFactorRoute.Use(bindMiddleware(middlewares.JWTTwoFactorAuthorization(config), config))
+			twoFactorRoute.Use(bindMiddleware(middlewares.TokenTwoFactorAuthorization(config), config))
 			{
 				twoFactorRoute.POST("/authorize.json", bindApiWithTokenUpdate(api.Authorizations.TwoFactorAuthorizeHandler, config))
 				twoFactorRoute.POST("/recovery.json", bindApiWithTokenUpdate(api.Authorizations.TwoFactorAuthorizeByRecoveryCodeHandler, config))
@@ -301,7 +291,7 @@ func startWebServer(c *core.CliContext) error {
 
 		if config.EnableOAuth2Login {
 			oauth2Route := apiRoute.Group("/oauth2")
-			oauth2Route.Use(bindMiddleware(middlewares.JWTOAuth2CallbackAuthorization(config), config))
+			oauth2Route.Use(bindMiddleware(middlewares.TokenOAuth2CallbackAuthorization(config), config))
 			{
 				oauth2Route.POST("/authorize.json", bindApiWithTokenUpdate(api.Authorizations.OAuth2CallbackAuthorizeHandler, config))
 			}
@@ -315,7 +305,7 @@ func startWebServer(c *core.CliContext) error {
 			apiRoute.POST("/verify_email/resend.json", bindApi(api.Users.UserSendVerifyEmailByUnloginUserHandler, config))
 
 			emailVerifyRoute := apiRoute.Group("/verify_email")
-			emailVerifyRoute.Use(bindMiddleware(middlewares.JWTEmailVerifyAuthorization(config), config))
+			emailVerifyRoute.Use(bindMiddleware(middlewares.TokenEmailVerifyAuthorization(config), config))
 			{
 				emailVerifyRoute.POST("/by_token.json", bindApi(api.Users.UserEmailVerifyHandler, config))
 			}
@@ -325,7 +315,7 @@ func startWebServer(c *core.CliContext) error {
 			apiRoute.POST("/forget_password/request.json", bindApi(api.ForgetPasswords.UserForgetPasswordRequestHandler, config))
 
 			resetPasswordRoute := apiRoute.Group("/forget_password/reset")
-			resetPasswordRoute.Use(bindMiddleware(middlewares.JWTResetPasswordAuthorization(config), config))
+			resetPasswordRoute.Use(bindMiddleware(middlewares.TokenResetPasswordAuthorization(config), config))
 			{
 				resetPasswordRoute.POST("/by_token.json", bindApi(api.ForgetPasswords.UserResetPasswordHandler, config))
 			}
@@ -334,24 +324,24 @@ func startWebServer(c *core.CliContext) error {
 		apiRoute.GET("/logout.json", bindApiWithTokenUpdate(api.Tokens.TokenRevokeCurrentHandler, config))
 
 		apiV1Route := apiRoute.Group("/v1")
-		apiV1Route.Use(bindMiddleware(middlewares.JWTAuthorizationByHeader(config), config))
+		apiV1Route.Use(bindMiddleware(middlewares.TokenAuthorizationByHeader(config), config))
 		apiV1Route.Use(bindMiddleware(middlewares.APITokenIpLimit(config), config))
 		{
 			// Tokens
 			apiV1Route.GET("/tokens/list.json", bindApi(api.Tokens.TokenListHandler, config))
-			apiV1Route.POST("/tokens/generate/api.json", bindApi(api.Tokens.TokenGenerateAPIHandler, config))
-			apiV1Route.POST("/tokens/generate/mcp.json", bindApi(api.Tokens.TokenGenerateMCPHandler, config))
+			apiV1Route.POST("/tokens/generate/api.json", bindApi(api.Tokens.TokenGenerateAPIHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+			apiV1Route.POST("/tokens/generate/mcp.json", bindApi(api.Tokens.TokenGenerateMCPHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 			apiV1Route.POST("/tokens/revoke.json", bindApi(api.Tokens.TokenRevokeHandler, config))
-			apiV1Route.POST("/tokens/revoke_all.json", bindApi(api.Tokens.TokenRevokeAllHandler, config))
-			apiV1Route.POST("/tokens/refresh.json", bindApiWithTokenUpdate(api.Tokens.TokenRefreshHandler, config))
+			apiV1Route.POST("/tokens/revoke_all.json", bindApi(api.Tokens.TokenRevokeAllHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+			apiV1Route.POST("/tokens/refresh.json", bindApiWithTokenUpdate(api.Tokens.TokenRefreshHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 
 			// Users
 			apiV1Route.GET("/users/profile/get.json", bindApi(api.Users.UserProfileHandler, config))
-			apiV1Route.POST("/users/profile/update.json", bindApiWithTokenUpdate(api.Users.UserUpdateProfileHandler, config))
+			apiV1Route.POST("/users/profile/update.json", bindApiWithTokenUpdate(api.Users.UserUpdateProfileHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 
 			if config.AvatarProvider == core.USER_AVATAR_PROVIDER_INTERNAL {
-				apiV1Route.POST("/users/avatar/update.json", bindApi(api.Users.UserUpdateAvatarHandler, config))
-				apiV1Route.POST("/users/avatar/remove.json", bindApi(api.Users.UserRemoveAvatarHandler, config))
+				apiV1Route.POST("/users/avatar/update.json", bindApi(api.Users.UserUpdateAvatarHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+				apiV1Route.POST("/users/avatar/remove.json", bindApi(api.Users.UserRemoveAvatarHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 			}
 
 			if config.EnableUserVerifyEmail {
@@ -361,28 +351,29 @@ func startWebServer(c *core.CliContext) error {
 			// External Authentications
 			if config.EnableOAuth2Login {
 				apiV1Route.GET("/users/external_auth/list.json", bindApi(api.UserExternalAuths.ExternalAuthListHandler, config))
-				apiV1Route.POST("/users/external_auth/unlink.json", bindApi(api.UserExternalAuths.UnlinkExternalAuthHandler, config))
+				apiV1Route.POST("/users/external_auth/unlink.json", bindApi(api.UserExternalAuths.UnlinkExternalAuthHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+				apiV1Route.POST("/users/external_auth/oauth2/link.json", bindApi(api.OAuth2Authentications.LinkHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 			}
 
 			// Application Cloud Settings
-			apiV1Route.GET("/users/settings/cloud/get.json", bindApi(api.UserApplicationCloudSettings.ApplicationSettingsGetHandler, config))
-			apiV1Route.POST("/users/settings/cloud/update.json", bindApi(api.UserApplicationCloudSettings.ApplicationSettingsUpdateHandler, config))
-			apiV1Route.POST("/users/settings/cloud/disable.json", bindApi(api.UserApplicationCloudSettings.ApplicationSettingsDisableHandler, config))
+			apiV1Route.GET("/users/settings/cloud/get.json", bindApi(api.UserApplicationCloudSettings.ApplicationSettingsGetHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+			apiV1Route.POST("/users/settings/cloud/update.json", bindApi(api.UserApplicationCloudSettings.ApplicationSettingsUpdateHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+			apiV1Route.POST("/users/settings/cloud/disable.json", bindApi(api.UserApplicationCloudSettings.ApplicationSettingsDisableHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 
 			// Two-Factor Authorization
 			if config.EnableTwoFactor {
 				apiV1Route.GET("/users/2fa/status.json", bindApi(api.TwoFactorAuthorizations.TwoFactorStatusHandler, config))
-				apiV1Route.POST("/users/2fa/enable/request.json", bindApi(api.TwoFactorAuthorizations.TwoFactorEnableRequestHandler, config))
-				apiV1Route.POST("/users/2fa/enable/confirm.json", bindApiWithTokenUpdate(api.TwoFactorAuthorizations.TwoFactorEnableConfirmHandler, config))
-				apiV1Route.POST("/users/2fa/disable.json", bindApi(api.TwoFactorAuthorizations.TwoFactorDisableHandler, config))
-				apiV1Route.POST("/users/2fa/recovery/regenerate.json", bindApi(api.TwoFactorAuthorizations.TwoFactorRecoveryCodeRegenerateHandler, config))
+				apiV1Route.POST("/users/2fa/enable/request.json", bindApi(api.TwoFactorAuthorizations.TwoFactorEnableRequestHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+				apiV1Route.POST("/users/2fa/enable/confirm.json", bindApiWithTokenUpdate(api.TwoFactorAuthorizations.TwoFactorEnableConfirmHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+				apiV1Route.POST("/users/2fa/disable.json", bindApi(api.TwoFactorAuthorizations.TwoFactorDisableHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+				apiV1Route.POST("/users/2fa/recovery/regenerate.json", bindApi(api.TwoFactorAuthorizations.TwoFactorRecoveryCodeRegenerateHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 			}
 
 			// Data
 			apiV1Route.GET("/data/statistics.json", bindApi(api.DataManagements.DataStatisticsHandler, config))
-			apiV1Route.POST("/data/clear/all.json", bindApi(api.DataManagements.ClearAllDataHandler, config))
-			apiV1Route.POST("/data/clear/transactions.json", bindApi(api.DataManagements.ClearAllTransactionsHandler, config))
-			apiV1Route.POST("/data/clear/transactions/by_account.json", bindApi(api.DataManagements.ClearAllTransactionsByAccountHandler, config))
+			apiV1Route.POST("/data/clear/all.json", bindApi(api.DataManagements.ClearAllDataHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+			apiV1Route.POST("/data/clear/transactions.json", bindApi(api.DataManagements.ClearAllTransactionsHandler, config, core.USER_TOKEN_TYPE_NORMAL))
+			apiV1Route.POST("/data/clear/transactions/by_account.json", bindApi(api.DataManagements.ClearAllTransactionsByAccountHandler, config, core.USER_TOKEN_TYPE_NORMAL))
 
 			if config.EnableDataExport {
 				apiV1Route.GET("/data/export.csv", bindCsv(api.DataManagements.ExportDataToEzbookkeepingCSVHandler, config))
@@ -414,6 +405,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.GET("/transactions/amounts/daily.json", bindApi(api.Transactions.TransactionDailyAmountsHandler, config))
 			apiV1Route.GET("/transactions/get.json", bindApi(api.Transactions.TransactionGetHandler, config))
 			apiV1Route.POST("/transactions/add.json", bindApi(api.Transactions.TransactionCreateHandler, config))
+			apiV1Route.POST("/transactions/add_batch.json", bindApi(api.Transactions.TransactionCreateBatchHandler, config))
 			apiV1Route.POST("/transactions/modify.json", bindApi(api.Transactions.TransactionModifyHandler, config))
 			apiV1Route.POST("/transactions/batch_update/category.json", bindApi(api.Transactions.TransactionBatchUpdateCategoriesHandler, config))
 			apiV1Route.POST("/transactions/batch_update/account.json", bindApi(api.Transactions.TransactionBatchUpdateAccountsHandler, config))
@@ -510,6 +502,14 @@ func startWebServer(c *core.CliContext) error {
 				apiV1Route.POST("/custom_icons/delete.json", bindApi(api.UserCustomIcons.CustomIconDeleteHandler, config))
 			}
 
+			// Import Presets
+			apiV1Route.GET("/import_presets/list.json", bindApi(api.ImportPresets.ImportPresetListHandler, config))
+			apiV1Route.GET("/import_presets/get.json", bindApi(api.ImportPresets.ImportPresetGetHandler, config))
+			apiV1Route.POST("/import_presets/add.json", bindApi(api.ImportPresets.ImportPresetCreateHandler, config))
+			apiV1Route.POST("/import_presets/modify.json", bindApi(api.ImportPresets.ImportPresetModifyHandler, config))
+			apiV1Route.POST("/import_presets/move.json", bindApi(api.ImportPresets.ImportPresetMoveHandler, config))
+			apiV1Route.POST("/import_presets/delete.json", bindApi(api.ImportPresets.ImportPresetDeleteHandler, config))
+
 			// Exchange Rates
 			apiV1Route.GET("/exchange_rates/latest.json", bindApi(api.ExchangeRates.LatestExchangeRateHandler, config))
 			apiV1Route.POST("/exchange_rates/user_custom/update.json", bindApi(api.ExchangeRates.UserCustomExchangeRateUpdateHandler, config))
@@ -568,9 +568,14 @@ func bindRedirect(fn core.RedirectHandlerFunc, config *settings.Config) gin.Hand
 	}
 }
 
-func bindApi(fn core.ApiHandlerFunc, config *settings.Config) gin.HandlerFunc {
+func bindApi(fn core.ApiHandlerFunc, config *settings.Config, onlyAllowedTokenTypes ...core.TokenType) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		c := core.WrapWebContext(ginCtx, config.TrustedProxyIPs)
+
+		if !middlewares.CheckCurrentTokenType(c, onlyAllowedTokenTypes...) {
+			return
+		}
+
 		result, err := fn(c)
 
 		if err != nil {
@@ -581,13 +586,23 @@ func bindApi(fn core.ApiHandlerFunc, config *settings.Config) gin.HandlerFunc {
 	}
 }
 
-func bindApiWithTokenUpdate(fn core.ApiHandlerFunc, config *settings.Config) gin.HandlerFunc {
+func bindApiWithTokenUpdate(fn core.ApiHandlerFunc, config *settings.Config, onlyAllowedTokenTypes ...core.TokenType) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		c := core.WrapWebContext(ginCtx, config.TrustedProxyIPs)
+
+		if !middlewares.CheckCurrentTokenType(c, onlyAllowedTokenTypes...) {
+			return
+		}
+
 		result, err := fn(c)
+		claims := c.GetTokenClaims()
 
 		if err == nil && config.MapProvider == settings.AmapProvider && config.AmapSecurityVerificationMethod == settings.AmapSecurityVerificationInternalProxyMethod {
-			middlewares.AmapApiProxyAuthCookie(c, config)
+			if claims != nil {
+				middlewares.AmapApiProxyAuthCookie(c, c.GetTextualMapProxyToken(), claims.ExpiresAt)
+			} else {
+				middlewares.AmapApiProxyAuthCookie(c, "", -1)
+			}
 		}
 
 		if err != nil {

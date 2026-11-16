@@ -65,6 +65,7 @@
             <f7-list-item
                 class="list-item-with-header-and-title list-item-no-item-after"
                 link="#"
+                :class="{ 'disabled': settingLanguage }"
                 :header="languageTitle"
                 :title="currentLanguageName"
                 @click="showLanguagePopup = true"
@@ -77,8 +78,9 @@
                                            :filter-placeholder="tt('Language')"
                                            :filter-no-items-text="tt('No results')"
                                            :items="allLanguages"
+                                           :model-value="user.language"
                                            v-model:show="showLanguagePopup"
-                                           v-model="currentLocale">
+                                           @update:model-value="changeLanguage">
                 </list-item-selection-popup>
             </f7-list-item>
 
@@ -124,6 +126,48 @@
                                            :items="allWeekDays"
                                            v-model:show="showFirstDayOfWeekPopup"
                                            v-model="user.firstDayOfWeek">
+                </list-item-selection-popup>
+            </f7-list-item>
+        </f7-list>
+
+        <f7-list strong inset dividers class="margin-vertical">
+            <f7-list-item
+                link="#"
+                class="list-item-with-header-and-title list-item-no-item-after"
+                :header="tt('Expense Amount Color')"
+                :title="findDisplayNameByType(allExpenseAmountColorTypes, user.expenseAmountColor)"
+                @click="showExpenseAmountColorPopup = true"
+            >
+                <list-item-selection-popup value-type="item"
+                                           key-field="type" value-field="type"
+                                           title-field="displayName"
+                                           :title="tt('Expense Amount Color')"
+                                           :enable-filter="true"
+                                           :filter-placeholder="tt('Color')"
+                                           :filter-no-items-text="tt('No results')"
+                                           :items="allExpenseAmountColorTypes"
+                                           v-model:show="showExpenseAmountColorPopup"
+                                           v-model="user.expenseAmountColor">
+                </list-item-selection-popup>
+            </f7-list-item>
+
+            <f7-list-item
+                link="#"
+                class="list-item-with-header-and-title list-item-no-item-after"
+                :header="tt('Income Amount Color')"
+                :title="findDisplayNameByType(allIncomeAmountColorTypes, user.incomeAmountColor)"
+                @click="showIncomeAmountColorPopup = true"
+            >
+                <list-item-selection-popup value-type="item"
+                                           key-field="type" value-field="type"
+                                           title-field="displayName"
+                                           :title="tt('Income Amount Color')"
+                                           :enable-filter="true"
+                                           :filter-placeholder="tt('Color')"
+                                           :filter-no-items-text="tt('No results')"
+                                           :items="allIncomeAmountColorTypes"
+                                           v-model:show="showIncomeAmountColorPopup"
+                                           v-model="user.incomeAmountColor">
                 </list-item-selection-popup>
             </f7-list-item>
         </f7-list>
@@ -183,7 +227,7 @@
 
             <f7-actions close-by-outside-click close-on-escape :opened="showPresetCategoriesMoreActionSheet" @actions:closed="showPresetCategoriesMoreActionSheet = false">
                 <f7-actions-group>
-                    <f7-actions-button @click="showPresetCategoriesChangeLocaleSheet = true">{{ tt('Change Language') }}</f7-actions-button>
+                    <f7-actions-button :class="{ 'disabled': settingLanguage }" @click="showPresetCategoriesChangeLocaleSheet = true">{{ tt('Change Language') }}</f7-actions-button>
                 </f7-actions-group>
                 <f7-actions-group>
                     <f7-actions-button bold close>{{ tt('Cancel') }}</f7-actions-button>
@@ -195,7 +239,8 @@
                                        title-field="nativeDisplayName" after-field="displayName"
                                        :items="allLanguages"
                                        v-model:show="showPresetCategoriesChangeLocaleSheet"
-                                       v-model="currentLocale">
+                                       :model-value="user.language"
+                                       @update:model-value="changeLanguage">
             </list-item-selection-sheet>
         </f7-popup>
     </f7-page>
@@ -219,6 +264,7 @@ import { type LocalizedPresetCategory } from '@/core/category.ts';
 import { findDisplayNameByType, categorizedArrayToPlainArray } from '@/lib/common.ts';
 import { getCategoryIconType } from '@/lib/icon.ts';
 import { isUserLogined } from '@/lib/userstate.ts';
+import logger from '@/lib/logger.ts';
 
 const props = defineProps<{
     f7router: Router.Router;
@@ -229,14 +275,17 @@ const { showAlert, showToast } = useI18nUIComponents();
 
 const {
     user,
+    settingLanguage,
     submitting,
+    allExpenseAmountColorTypes,
+    allIncomeAmountColorTypes,
     languageTitle,
-    currentLocale,
     currentLanguageName,
     inputEmptyProblemMessage,
     inputInvalidProblemMessage,
     inputIsEmpty,
     inputIsInvalid,
+    updateLanguage,
     getCategoryTypeName,
     doAfterSignupSuccess
 } = useSignupPageBase();
@@ -247,6 +296,8 @@ const usePresetCategories = ref<boolean>(false);
 const showLanguagePopup = ref<boolean>(false);
 const showDefaultCurrencyPopup = ref<boolean>(false);
 const showFirstDayOfWeekPopup = ref<boolean>(false);
+const showExpenseAmountColorPopup = ref<boolean>(false);
+const showIncomeAmountColorPopup = ref<boolean>(false);
 const showPresetCategories = ref<boolean>(false);
 const showPresetCategoriesMoreActionSheet = ref<boolean>(false);
 const showPresetCategoriesChangeLocaleSheet = ref<boolean>(false);
@@ -254,7 +305,7 @@ const showPresetCategoriesChangeLocaleSheet = ref<boolean>(false);
 const allLanguages = computed<LanguageOption[]>(() => getAllLanguageOptions(false));
 const allCurrencies = computed<LocalizedCurrencyInfo[]>(() => getAllCurrencies());
 const allWeekDays = computed<TypeAndDisplayName[]>(() => getAllWeekDays());
-const allPresetCategories = computed<Record<string, LocalizedPresetCategory[]>>(() => getAllTransactionDefaultCategories(0, currentLocale.value));
+const allPresetCategories = computed<Record<string, LocalizedPresetCategory[]>>(() => getAllTransactionDefaultCategories(0, user.value.language));
 const currentDayOfWeekName = computed<string | null>(() => findDisplayNameByType(allWeekDays.value, user.value.firstDayOfWeek));
 
 function submit(): void {
@@ -296,17 +347,18 @@ function submit(): void {
             return;
         }
 
-        doAfterSignupSuccess(response);
-        submitting.value = false;
-        hideLoading();
+        doAfterSignupSuccess(response).then(() => {
+            submitting.value = false;
+            hideLoading();
 
-        if (usePresetCategories.value && !response.presetCategoriesSaved) {
-            showToast('You have been successfully registered, but there was an failure when adding preset categories. You can re-add preset categories in settings page anytime.');
-        } else {
-            showToast('You have been successfully registered');
-        }
+            if (usePresetCategories.value && !response.presetCategoriesSaved) {
+                showToast('You have been successfully registered, but there was an failure when adding preset categories. You can re-add preset categories in settings page anytime.');
+            } else {
+                showToast('You have been successfully registered');
+            }
 
-        router.navigate('/');
+            router.navigate('/');
+        });
     }).catch(error => {
         submitting.value = false;
         hideLoading();
@@ -314,6 +366,21 @@ function submit(): void {
         if (!error.processed) {
             showToast(error.message || error);
         }
+    });
+}
+
+function changeLanguage(languageTag: string): void {
+    if (settingLanguage.value) {
+        return;
+    }
+
+    showLoading(() => settingLanguage.value);
+
+    updateLanguage(languageTag).catch(error => {
+        logger.error('failed to set language', error);
+        showToast(error.message || error);
+    }).finally(() => {
+        hideLoading();
     });
 }
 </script>

@@ -9,11 +9,13 @@ import { useTokensStore } from '@/stores/token.ts';
 import { useTransactionsStore } from '@/stores/transaction.ts';
 import { useExchangeRatesStore } from '@/stores/exchangeRates.ts';
 
+import { isObject, isString } from '@/lib/common.ts';
 import { isWebAuthnSupported } from '@/lib/webauthn.ts';
 import { hasWebAuthnConfig } from '@/lib/userstate.ts';
-import { updateMapCacheExpiration } from '@/lib/cache.ts';
+import { updateMapCacheExpiration, updateTransactionPictureCacheExpiration } from '@/lib/cache.ts';
 import { getClientDisplayVersion } from '@/lib/version.ts';
 import { setExpenseAndIncomeAmountColor } from '@/lib/ui/common.ts';
+import logger from '@/lib/logger.ts';
 
 export function useUnlockPageBase() {
     const { setLanguage, initLocale } = useI18n();
@@ -39,34 +41,55 @@ export function useUnlockPageBase() {
         return !!pinCode && pinCode.length === 6;
     }
 
-    function doAfterUnlocked(): void {
+    function doAfterUnlocked(): Promise<string> {
         transactionsStore.initTransactionDraft();
-        tokensStore.refreshTokenAndRevokeOldToken().then(response => {
-            if (response.user) {
-                const localeDefaultSettings = setLanguage(response.user.language);
-                settingsStore.updateLocalizedDefaultSettings(localeDefaultSettings);
 
-                setExpenseAndIncomeAmountColor(response.user.expenseAmountColor, response.user.incomeAmountColor);
-            }
+        return new Promise<string>((resolve, reject) => {
+            let unlockHint: string = '';
 
-            updateMapCacheExpiration(settingsStore.appSettings.mapCacheExpiration);
-            exchangeRatesStore.removeExpiredExchangeRates(true);
-            exchangeRatesStore.autoUpdateExchangeRatesData();
+            tokensStore.refreshTokenAndRevokeOldToken().then(response => {
+                const languagePromise = response.user ? setLanguage(response.user.language) : Promise.reject();
 
-            if (response.notificationContent) {
-                rootStore.setNotificationContent(response.notificationContent);
-            }
+                languagePromise.then(localeDefaultSettings => {
+                    settingsStore.updateLocalizedDefaultSettings(localeDefaultSettings);
+                }).catch(error => {
+                    if (isObject(error) && 'message' in error && isString(error.message)) {
+                        unlockHint = error.message;
+                    } else if (isString(error)) {
+                        unlockHint = error;
+                    }
+                }).finally(() => {
+                    if (response.user) {
+                        setExpenseAndIncomeAmountColor(response.user.expenseAmountColor, response.user.incomeAmountColor);
+                    }
+
+                    updateMapCacheExpiration(settingsStore.appSettings.mapCacheExpiration);
+                    updateTransactionPictureCacheExpiration(settingsStore.appSettings.transactionPictureCacheExpiration);
+                    exchangeRatesStore.removeExpiredExchangeRates(true);
+                    exchangeRatesStore.autoUpdateExchangeRatesData();
+
+                    if (response.notificationContent) {
+                        rootStore.setNotificationContent(response.notificationContent);
+                    }
+
+                    resolve(unlockHint);
+                });
+            }).catch(error => {
+                logger.error('failed to refresh token after unlocking', error);
+                reject(error);
+            });
         });
     }
 
-    function doRelogin(): void {
+    function doRelogin(): Promise<void> {
         rootStore.forceLogout();
         settingsStore.clearAppSettings();
 
-        const localeDefaultSettings = initLocale(userStore.currentUserLanguage, settingsStore.appSettings.timeZone);
-        settingsStore.updateLocalizedDefaultSettings(localeDefaultSettings);
-
-        setExpenseAndIncomeAmountColor(userStore.currentUserExpenseAmountColor, userStore.currentUserIncomeAmountColor);
+        return initLocale(userStore.currentUserLanguage, settingsStore.appSettings.timeZone).then(localeDefaultSettings => {
+            settingsStore.updateLocalizedDefaultSettings(localeDefaultSettings);
+        }).finally(() => {
+            setExpenseAndIncomeAmountColor(userStore.currentUserExpenseAmountColor, userStore.currentUserIncomeAmountColor);
+        });
     }
 
     return {

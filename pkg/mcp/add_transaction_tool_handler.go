@@ -45,6 +45,11 @@ type mcpAddTransactionToolHandler struct{}
 
 var MCPAddTransactionToolHandler = &mcpAddTransactionToolHandler{}
 
+// ToolType returns the MCP tool type
+func (h *mcpAddTransactionToolHandler) ToolType() core.MCPToolType {
+	return core.MCP_TOOL_TYPE_ADD_TRANSACTION
+}
+
 // Name returns the name of the MCP tool
 func (h *mcpAddTransactionToolHandler) Name() string {
 	return "add_transaction"
@@ -53,6 +58,21 @@ func (h *mcpAddTransactionToolHandler) Name() string {
 // Description returns the description of the MCP tool
 func (h *mcpAddTransactionToolHandler) Description() string {
 	return "Add a new transaction in ezBookkeeping."
+}
+
+// DataOperationType returns how the MCP tool operates on business records
+func (h *mcpAddTransactionToolHandler) DataOperationType() MCPToolDataOperationType {
+	return MCP_TOOL_DATA_OPERATION_ADD
+}
+
+// IsIdempotent returns whether repeated calls with the same arguments have no additional effects
+func (h *mcpAddTransactionToolHandler) IsIdempotent() bool {
+	return false
+}
+
+// DependsOnExternalData returns whether the MCP tool may depend on third-party data
+func (h *mcpAddTransactionToolHandler) DependsOnExternalData() bool {
+	return false
 }
 
 // InputType returns the input type for the MCP tool request

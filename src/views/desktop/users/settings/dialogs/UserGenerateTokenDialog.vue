@@ -37,6 +37,21 @@
 
                 <div class="mt-5 mb-4" v-if="!generatedToken">
                     <v-row>
+                        <v-col cols="12" v-if="tokenType === 'mcp'">
+                            <v-checkbox class="mt-n3 mb-2"
+                                        :disabled="generating"
+                                        :label="tt('Enable All MCP Tools')"
+                                        v-model="mcpTokenEnabledAllMCPTools"
+                                        @update:model-value="$event && (mcpTokenEnabledMCPTools = ALL_MCP_TOOL_NAMES)" />
+
+                            <v-select multiple chips closable-chips clearable persistent-placeholder
+                                      item-title="displayName" item-value="name"
+                                      :disabled="generating || mcpTokenEnabledAllMCPTools"
+                                      :label="tt('Enabled MCP Tools')"
+                                      :placeholder="tt('None')"
+                                      :items="allMcpTools"
+                                      v-model="mcpTokenEnabledMCPTools" />
+                        </v-col>
                         <v-col cols="12" :md="tokenExpirationTime >= 0 ? 12 : 6">
                             <v-select
                                 item-title="displayName"
@@ -87,21 +102,20 @@
                 </div>
 
                 <div class="my-3 flex-grow-1 overflow-y-auto" :style="codeContainerStyle" v-if="generatedToken">
-                    <div class="w-100 h-100 code-container">
-                        <v-textarea no-resize class="w-100 h-100 always-cursor-text" :readonly="true"
-                                    :value="generatedToken" v-if="(tokenType === 'api' && (!showAPIExample || !serverUrl)) || (tokenType === 'mcp' && (!showMCPConfiguration || !serverUrl))" />
-                        <v-textarea no-resize class="w-100 h-100 always-cursor-text" :readonly="true"
-                                    :value="apiExample" v-if="tokenType === 'api' && showAPIExample && serverUrl" />
-                        <v-textarea no-resize class="w-100 h-100 always-cursor-text" :readonly="true"
-                                    :value="mcpServerConfiguration" v-if="tokenType === 'mcp' && showMCPConfiguration && serverUrl" />
-                    </div>
+                    <v-textarea no-resize class="w-100 h-100 code-textarea always-cursor-text" :readonly="true"
+                                :value="generatedToken" v-if="(tokenType === 'api' && (!showAPIExample || !serverUrl)) || (tokenType === 'mcp' && (!showMCPConfiguration || !serverUrl))" />
+                    <v-textarea no-resize class="w-100 h-100 code-textarea always-cursor-text" :readonly="true"
+                                :value="apiExample" v-if="tokenType === 'api' && showAPIExample && serverUrl" />
+                    <v-textarea no-resize class="w-100 h-100 code-textarea always-cursor-text" :readonly="true"
+                                :value="mcpServerConfiguration" v-if="tokenType === 'mcp' && showMCPConfiguration && serverUrl" />
                 </div>
             </template>
 
             <template #footer>
                 <v-spacer/>
                 <div ref="buttonContainer">
-                    <v-btn :disabled="generating || !currentPassword" @click="generateToken" v-if="!generatedToken">
+                    <v-btn :disabled="generating || !currentPassword || (tokenType === 'mcp' && !mcpTokenEnabledAllMCPTools && mcpTokenEnabledMCPTools.length < 1)"
+                           @click="generateToken" v-if="!generatedToken">
                         {{ tt('Generate') }}
                         <v-progress-circular indeterminate size="22" class="ms-2" v-if="generating"></v-progress-circular>
                     </v-btn>
@@ -110,38 +124,37 @@
             </template>
         </one-column-dialog-layout>
     </v-dialog>
-
-    <snack-bar ref="snackbar" />
 </template>
 
 <script setup lang="ts">
-import SnackBar from '@/components/desktop/SnackBar.vue';
-
 import { ref, computed, useTemplateRef } from 'vue';
 
 import { useI18n } from '@/locales/helpers.ts';
 
 import { useTokensStore } from '@/stores/token.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
+import type { NameAndDisplayName } from '@/core/base.ts';
+import { ALL_MCP_TOOL_NAMES, DEFAULT_ENABLED_MCP_TOOL_NAMES } from '@/consts/mcp.ts';
 import { type TokenGenerateAPIResponse, type TokenGenerateMCPResponse } from '@/models/token.ts';
 
 import { isAPITokenEnabled, isMCPServerEnabled } from '@/lib/server_settings.ts';
 import { copyTextToClipboard } from '@/lib/ui/common.ts';
 
-type SnackBarType = InstanceType<typeof SnackBar>;
-
-const { tt, formatNumberToLocalizedNumerals } = useI18n();
+const { tt, getAllMCPTools, formatNumberToLocalizedNumerals } = useI18n();
 
 const tokensStore = useTokensStore();
+const desktopPageStore = useDesktopPageStore();
 
 const buttonContainer = useTemplateRef<HTMLElement>('buttonContainer');
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
 
 let resolveFunc: (() => void) | null = null;
 let rejectFunc: ((reason?: unknown) => void) | null = null;
 
 const showState = ref<boolean>(false);
 const tokenType = ref<'api' | 'mcp'>(isAPITokenEnabled() ? 'api' : (isMCPServerEnabled() ? 'mcp' : 'api'));
+const mcpTokenEnabledAllMCPTools = ref<boolean>(false);
+const mcpTokenEnabledMCPTools = ref<string[]>(DEFAULT_ENABLED_MCP_TOOL_NAMES);
 const tokenExpirationTime = ref<number>(86400);
 const tokenCustomExpirationTime = ref<number>(86400);
 const currentPassword = ref<string>('');
@@ -153,13 +166,15 @@ const generatedToken = ref<string>('');
 
 const codeContainerStyle = computed<string>(() => {
     if (tokenType.value === 'api' && showAPIExample.value && serverUrl.value) {
-        return 'height: 160px';
+        return 'height: 140px';
     } else if (tokenType.value === 'mcp' && showMCPConfiguration.value && serverUrl.value) {
-        return 'height: 390px';
+        return 'height: 360px';
     } else {
-        return 'height: 160px';
+        return 'height: 140px';
     }
 });
+
+const allMcpTools = computed<NameAndDisplayName[]>(() => getAllMCPTools());
 
 const apiExample = computed<string>(() => {
     return `curl -H 'Authorization: Bearer ${generatedToken.value}' '${serverUrl.value}/v1/users/profile/get.json'`;
@@ -182,6 +197,8 @@ const mcpServerConfiguration = computed<string>(() => {
 function open(): Promise<void> {
     showState.value = true;
     currentPassword.value = '';
+    mcpTokenEnabledAllMCPTools.value = false;
+    mcpTokenEnabledMCPTools.value = DEFAULT_ENABLED_MCP_TOOL_NAMES;
     tokenType.value = isAPITokenEnabled() ? 'api' : (isMCPServerEnabled() ? 'mcp' : 'api');
     tokenExpirationTime.value = 86400;
     tokenCustomExpirationTime.value = 86400;
@@ -202,12 +219,17 @@ function generateToken(): void {
         return;
     }
 
+    if (tokenType.value === 'mcp' && !mcpTokenEnabledAllMCPTools.value && mcpTokenEnabledMCPTools.value.length < 1) {
+        return;
+    }
+
     generating.value = true;
 
     tokensStore.generateToken({
         type: tokenType.value,
         expiresInSeconds: tokenExpirationTime.value >= 0 ? tokenExpirationTime.value : tokenCustomExpirationTime.value,
-        password: currentPassword.value
+        password: currentPassword.value,
+        enabledMCPTools: mcpTokenEnabledAllMCPTools.value ? undefined : mcpTokenEnabledMCPTools.value
     }).then(result => {
         generating.value = false;
         currentPassword.value = '';
@@ -223,7 +245,7 @@ function generateToken(): void {
         generating.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -237,7 +259,7 @@ function copy(): void {
         copyTextToClipboard(generatedToken.value, buttonContainer.value);
     }
 
-    snackbar.value?.showMessage('Data copied');
+    desktopPageStore.addToast('Data copied');
 }
 
 function cancel(): void {

@@ -34,12 +34,14 @@ var ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES = map[string]UserApplicationClo
 	"showTotalAmountInTransactionListPage":         USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
 	"totalAmountTypeInTransactionListPage":         USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"showTagInTransactionListPage":                 USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
+	"showPictureIndicatorInTransactionListPage":    USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
 	"defaultKeywordMatchModeInTransactionListPage": USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	// Transaction Edit Page
 	"quickSaveButtonStyleInMobileTransactionListPage":          USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"quickAddButtonActionInMobileTransactionEditPage":          USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"autoSaveTransactionDraft":                                 USER_APPLICATION_CLOUD_SETTING_TYPE_STRING,
 	"autoGetCurrentGeoLocation":                                USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
+	"showSelectedTagsOnTopInMobile":                            USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
 	"alwaysShowTransactionPicturesInMobileTransactionEditPage": USER_APPLICATION_CLOUD_SETTING_TYPE_BOOLEAN,
 	"transactionPictureQuality":                                USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	// AI Clipboard Text Recognition
@@ -61,8 +63,9 @@ var ALL_ALLOWED_CLOUD_SYNC_APP_SETTING_KEY_TYPES = map[string]UserApplicationClo
 	// Exchange Rates Data Page
 	"currencySortByInExchangeRatesPage": USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	// Browser Cache Management
-	"mapCacheExpiration":               USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
-	"exchangeRatesDataCacheExpiration": USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
+	"mapCacheExpiration":                USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
+	"transactionPictureCacheExpiration": USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
+	"exchangeRatesDataCacheExpiration":  USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	// Statistics Settings
 	"statistics.defaultChartDataType":                 USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,
 	"statistics.defaultTimezoneType":                  USER_APPLICATION_CLOUD_SETTING_TYPE_NUMBER,

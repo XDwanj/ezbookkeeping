@@ -21,6 +21,9 @@ var AllLanguages = map[string]*LocaleInfo{
 	"fr": {
 		Content: fr,
 	},
+	"hi": {
+		Content: hi,
+	},
 	"it": {
 		Content: it,
 	},
@@ -47,6 +50,9 @@ var AllLanguages = map[string]*LocaleInfo{
 	},
 	"ru": {
 		Content: ru,
+	},
+	"sk": {
+		Content: sk,
 	},
 	"sl": {
 		Content: sl,

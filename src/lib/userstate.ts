@@ -1,4 +1,6 @@
-import CryptoJS from 'crypto-js';
+import sha256 from 'crypto-js/sha256';
+import aes from 'crypto-js/aes';
+import utf8 from 'crypto-js/enc-utf8';
 
 import type { ApplicationLockState, WebAuthnConfig } from '@/core/setting.ts';
 import type { UserBasicInfo } from '@/models/user.ts';
@@ -6,6 +8,7 @@ import type { TransactionDraft } from '@/models/transaction.ts';
 
 import { isString, isObject } from './common.ts';
 import { isEnableApplicationLock } from './settings.ts';
+import { clearAllUserCaches } from './cache.ts';
 import logger from './logger.ts';
 
 const appLockSecretBaseStringPrefix: string = 'EBK_LOCK_SECRET_';
@@ -20,19 +23,19 @@ const encryptedTokenSessionStorageKey: string = 'ebk_user_session_encrypted_toke
 const appLockStateSessionStorageKey: string = 'ebk_user_app_lock_state'; // { 'username': '', secret: '' }
 
 function getAppLockSecret(pinCode: string): string {
-    const hashedPinCode = CryptoJS.SHA256(appLockSecretBaseStringPrefix + pinCode).toString();
+    const hashedPinCode = sha256(appLockSecretBaseStringPrefix + pinCode).toString();
     return hashedPinCode.substring(0, 24); // put secret into user id of webauthn (user id total length must less 64 bytes)
 }
 
 function getEncryptedToken(token: string, appLockState: ApplicationLockState): string {
-    const key = CryptoJS.SHA256(`${appLockSecretBaseStringPrefix}|${appLockState.username}|${appLockState.secret}`).toString();
-    return CryptoJS.AES.encrypt(token, key).toString();
+    const key = sha256(`${appLockSecretBaseStringPrefix}|${appLockState.username}|${appLockState.secret}`).toString();
+    return aes.encrypt(token, key).toString();
 }
 
 function getDecryptedToken(encryptedToken: string, appLockState: ApplicationLockState): string {
-    const key = CryptoJS.SHA256(`${appLockSecretBaseStringPrefix}|${appLockState.username}|${appLockState.secret}`).toString();
-    const bytes = CryptoJS.AES.decrypt(encryptedToken, key);
-    return bytes.toString(CryptoJS.enc.Utf8);
+    const key = sha256(`${appLockSecretBaseStringPrefix}|${appLockState.username}|${appLockState.secret}`).toString();
+    const bytes = aes.decrypt(encryptedToken, key);
+    return bytes.toString(utf8);
 }
 
 export function isUserLogined(): boolean {
@@ -71,7 +74,7 @@ export function getUserAppLockState(): ApplicationLockState | null {
     return appLockState as ApplicationLockState;
 }
 
-export function unlockTokenByWebAuthn(credentialId: string, userName: string, userSecret: string): void {
+export function unlockTokenByWebAuthn(credentialId: string, userName: string, userSecret: string): boolean {
     const webauthnConfigData = localStorage.getItem(webauthnConfigLocalStorageKey);
 
     if (!webauthnConfigData) {
@@ -96,12 +99,17 @@ export function unlockTokenByWebAuthn(credentialId: string, userName: string, us
     };
     const token = getDecryptedToken(encryptedToken, appLockState);
 
+    if (!token || token.length < 8) { // v2 prefix "ebk-tk-"
+        throw new Error('Failed to decrypt token');
+    }
+
     sessionStorage.setItem(appLockStateSessionStorageKey, JSON.stringify(appLockState));
     sessionStorage.setItem(encryptedTokenSessionStorageKey, encryptedToken);
     sessionStorage.setItem(tokenSessionStorageKey, token);
+    return true;
 }
 
-export function unlockTokenByPinCode(userName: string, pinCode: string): void {
+export function unlockTokenByPinCode(userName: string, pinCode: string): boolean {
     const encryptedToken = localStorage.getItem(tokenLocalStorageKey);
 
     if (!encryptedToken) {
@@ -114,9 +122,14 @@ export function unlockTokenByPinCode(userName: string, pinCode: string): void {
     };
     const token = getDecryptedToken(encryptedToken, appLockState);
 
+    if (!token || token.length < 8) { // v2 prefix "ebk-tk-"
+        throw new Error('Failed to decrypt token');
+    }
+
     sessionStorage.setItem(appLockStateSessionStorageKey, JSON.stringify(appLockState));
     sessionStorage.setItem(encryptedTokenSessionStorageKey, encryptedToken);
     sessionStorage.setItem(tokenSessionStorageKey, token);
+    return true;
 }
 
 export function encryptToken(userName: string, pinCode: string): void {
@@ -250,7 +263,19 @@ export function getCurrentUserInfo(): UserBasicInfo | null {
 
 export function updateCurrentUserInfo(user: UserBasicInfo): void {
     if (isObject(user)) {
-        localStorage.setItem(userInfoLocalStorageKey, JSON.stringify(user));
+        // trim token in the user avatar url
+        const storedUser = { ...user };
+
+        if (storedUser.avatar && isString(storedUser.avatar)) {
+            const avatarUrl = new URL(storedUser.avatar);
+
+            if (avatarUrl.searchParams.has('token')) {
+                avatarUrl.searchParams.delete('token');
+                storedUser.avatar = avatarUrl.toString();
+            }
+        }
+
+        localStorage.setItem(userInfoLocalStorageKey, JSON.stringify(storedUser));
     }
 }
 
@@ -309,6 +334,10 @@ export function clearCurrentSessionToken(): void {
 }
 
 export function clearCurrentTokenAndUserInfo(clearAppLockState: boolean): void {
+    clearAllUserCaches().catch(error => {
+        logger.warn('failed to clear user caches', error);
+    });
+
     if (clearAppLockState) {
         sessionStorage.removeItem(appLockStateSessionStorageKey);
     }

@@ -193,15 +193,18 @@ const (
 	defaultInMemoryDuplicateCheckerCleanupInterval uint32 = 60  // 1 minutes
 	defaultDuplicateSubmissionsInterval            uint32 = 300 // 5 minutes
 
-	defaultSecretKey                     string = "ezbookkeeping"
-	defaultTrustedProxyIPs               string = "10.0.0.0/8,169.254.0.0/16,127.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-	defaultTokenExpiredTime              uint32 = 2592000 // 30 days
-	defaultTokenMinRefreshInterval       uint32 = 86400   // 1 day
-	defaultTemporaryTokenExpiredTime     uint32 = 300     // 5 minutes
-	defaultEmailVerifyTokenExpiredTime   uint32 = 3600    // 60 minutes
-	defaultPasswordResetTokenExpiredTime uint32 = 3600    // 60 minutes
-	defaultMaxFailuresPerIpPerMinute     uint32 = 5
-	defaultMaxFailuresPerUserPerMinute   uint32 = 5
+	defaultSecretKey                          string = "ezbookkeeping"
+	defaultTrustedProxyIPs                    string = "10.0.0.0/8,169.254.0.0/16,127.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	defaultTokenExpiredTime                   uint32 = 2592000 // 30 days
+	defaultTokenMinRefreshInterval            uint32 = 86400   // 1 day
+	defaultTemporaryTokenExpiredTime          uint32 = 300     // 5 minutes
+	defaultEmailVerifyTokenExpiredTime        uint32 = 3600    // 60 minutes
+	defaultUserAvatarTokenExpiredTime         uint32 = 3600    // 60 minutes
+	defaultUserCustomIconTokenExpiredTime     uint32 = 3600    // 60 minutes
+	defaultTransactionPictureTokenExpiredTime uint32 = 3600    // 60 minutes
+	defaultPasswordResetTokenExpiredTime      uint32 = 3600    // 60 minutes
+	defaultMaxFailuresPerIpPerMinute          uint32 = 5
+	defaultMaxFailuresPerUserPerMinute        uint32 = 5
 
 	defaultOAuth2StateExpiredTime uint32 = 300   // 5 minutes
 	defaultOAuth2RequestTimeout   uint32 = 10000 // 10 seconds
@@ -409,23 +412,29 @@ type Config struct {
 	EnableCreateScheduledTransaction bool
 
 	// Secret
-	SecretKeyNoSet                        bool
-	SecretKey                             string
-	TrustedProxyIPs                       []*net.IPNet
-	TrustedProxyTextualIPs                []string
-	TokenExpiredTime                      uint32
-	TokenExpiredTimeDuration              time.Duration
-	TokenMinRefreshInterval               uint32
-	TemporaryTokenExpiredTime             uint32
-	TemporaryTokenExpiredTimeDuration     time.Duration
-	EmailVerifyTokenExpiredTime           uint32
-	EmailVerifyTokenExpiredTimeDuration   time.Duration
-	PasswordResetTokenExpiredTime         uint32
-	PasswordResetTokenExpiredTimeDuration time.Duration
-	EnableAPIToken                        bool
-	APITokenAllowedRemoteIPs              []*core.IPPattern
-	MaxFailuresPerIpPerMinute             uint32
-	MaxFailuresPerUserPerMinute           uint32
+	SecretKeyNoSet                             bool
+	SecretKey                                  string
+	TrustedProxyIPs                            []*net.IPNet
+	TrustedProxyTextualIPs                     []string
+	TokenExpiredTime                           uint32
+	TokenExpiredTimeDuration                   time.Duration
+	TokenMinRefreshInterval                    uint32
+	TemporaryTokenExpiredTime                  uint32
+	TemporaryTokenExpiredTimeDuration          time.Duration
+	EmailVerifyTokenExpiredTime                uint32
+	EmailVerifyTokenExpiredTimeDuration        time.Duration
+	PasswordResetTokenExpiredTime              uint32
+	PasswordResetTokenExpiredTimeDuration      time.Duration
+	UserAvatarTokenExpiredTime                 uint32
+	UserAvatarTokenExpiredTimeDuration         time.Duration
+	UserCustomIconTokenExpiredTime             uint32
+	UserCustomIconTokenExpiredTimeDuration     time.Duration
+	TransactionPictureTokenExpiredTime         uint32
+	TransactionPictureTokenExpiredTimeDuration time.Duration
+	EnableAPIToken                             bool
+	APITokenAllowedRemoteIPs                   []*core.IPPattern
+	MaxFailuresPerIpPerMinute                  uint32
+	MaxFailuresPerUserPerMinute                uint32
 
 	// Auth
 	EnableInternalAuth                bool
@@ -479,6 +488,7 @@ type Config struct {
 	// Map
 	MapProvider                           string
 	EnableMapDataFetchProxy               bool
+	SupportMapDataFetchProxy              bool
 	MapProxy                              string
 	TomTomMapAPIKey                       string
 	TianDiTuAPIKey                        string
@@ -759,7 +769,7 @@ func loadMCPServerConfiguration(config *Config, configFile *ini.File, sectionNam
 func loadDatabaseConfiguration(config *Config, configFile *ini.File, sectionName string) error {
 	dbConfig := &DatabaseConfig{}
 
-	dbConfig.DatabaseType = getConfigItemStringValue(configFile, sectionName, "type", MySqlDbType)
+	dbConfig.DatabaseType = getConfigItemStringValue(configFile, sectionName, "type")
 
 	if dbConfig.DatabaseType != MySqlDbType &&
 		dbConfig.DatabaseType != PostgresDbType &&
@@ -1126,6 +1136,30 @@ func loadSecurityConfiguration(config *Config, configFile *ini.File, sectionName
 
 	config.PasswordResetTokenExpiredTimeDuration = time.Duration(config.PasswordResetTokenExpiredTime) * time.Second
 
+	config.UserAvatarTokenExpiredTime = getConfigItemUint32Value(configFile, sectionName, "user_avatar_token_expired_time", defaultUserAvatarTokenExpiredTime)
+
+	if config.UserAvatarTokenExpiredTime < 60 {
+		return errs.ErrInvalidUserAvatarTokenExpiredTime
+	}
+
+	config.UserAvatarTokenExpiredTimeDuration = time.Duration(config.UserAvatarTokenExpiredTime) * time.Second
+
+	config.UserCustomIconTokenExpiredTime = getConfigItemUint32Value(configFile, sectionName, "user_custom_icon_token_expired_time", defaultUserCustomIconTokenExpiredTime)
+
+	if config.UserCustomIconTokenExpiredTime < 60 {
+		return errs.ErrInvalidUserCustomIconTokenExpiredTime
+	}
+
+	config.UserCustomIconTokenExpiredTimeDuration = time.Duration(config.UserCustomIconTokenExpiredTime) * time.Second
+
+	config.TransactionPictureTokenExpiredTime = getConfigItemUint32Value(configFile, sectionName, "transaction_picture_token_expired_time", defaultTransactionPictureTokenExpiredTime)
+
+	if config.TransactionPictureTokenExpiredTime < 60 {
+		return errs.ErrInvalidTransactionPictureTokenExpiredTime
+	}
+
+	config.TransactionPictureTokenExpiredTimeDuration = time.Duration(config.TransactionPictureTokenExpiredTime) * time.Second
+
 	config.EnableAPIToken = getConfigItemBoolValue(configFile, sectionName, "enable_api_token", false)
 	config.APITokenAllowedRemoteIPs, err = getIPPatterns(configFile, sectionName, "api_token_allowed_remote_ips", "")
 
@@ -1144,7 +1178,7 @@ func loadAuthConfiguration(config *Config, configFile *ini.File, sectionName str
 	config.EnableOAuth2Login = getConfigItemBoolValue(configFile, sectionName, "enable_oauth2_auth", false)
 	config.EnableTwoFactor = getConfigItemBoolValue(configFile, sectionName, "enable_two_factor", true)
 	config.EnableUserForgetPassword = getConfigItemBoolValue(configFile, sectionName, "enable_forget_password", false)
-	config.ForgetPasswordRequireVerifyEmail = getConfigItemBoolValue(configFile, sectionName, "forget_password_require_email_verify", false)
+	config.ForgetPasswordRequireVerifyEmail = getConfigItemBoolValue(configFile, sectionName, "forget_password_require_email_verify", true)
 	config.OAuth2ClientID = getConfigItemStringValue(configFile, sectionName, "oauth2_client_id")
 	config.OAuth2ClientSecret = getConfigItemStringValue(configFile, sectionName, "oauth2_client_secret")
 	config.OAuth2UsePKCE = getConfigItemBoolValue(configFile, sectionName, "oauth2_use_pkce", false)
@@ -1280,6 +1314,21 @@ func loadMapConfiguration(config *Config, configFile *ini.File, sectionName stri
 	}
 
 	config.EnableMapDataFetchProxy = getConfigItemBoolValue(configFile, sectionName, "map_data_fetch_proxy", false)
+
+	if config.MapProvider == OpenStreetMapProvider ||
+		config.MapProvider == OpenStreetMapHumanitarianStyleProvider ||
+		config.MapProvider == OpenTopoMapProvider ||
+		config.MapProvider == OPNVKarteMapProvider ||
+		config.MapProvider == CyclOSMMapProvider ||
+		config.MapProvider == CartoDBMapProvider ||
+		config.MapProvider == TomTomMapProvider ||
+		config.MapProvider == TianDiTuProvider ||
+		config.MapProvider == CustomProvider {
+		config.SupportMapDataFetchProxy = true
+	} else {
+		config.SupportMapDataFetchProxy = false
+	}
+
 	config.MapProxy = getConfigItemStringValue(configFile, sectionName, "proxy", "system")
 	config.TomTomMapAPIKey = getConfigItemStringValue(configFile, sectionName, "tomtom_map_api_key")
 	config.TianDiTuAPIKey = getConfigItemStringValue(configFile, sectionName, "tianditu_map_app_key")

@@ -7,6 +7,7 @@ const TokenMaxUserAgentLength = 255
 
 // TokenRecord represents token data stored in database
 type TokenRecord struct {
+	core.TokenRecord
 	Uid              int64          `xorm:"PK INDEX(IDX_token_record_uid_type_expired_time) INDEX(IDX_token_record_expired_time)"`
 	UserTokenId      int64          `xorm:"PK"`
 	TokenType        core.TokenType `xorm:"INDEX(IDX_token_record_uid_type_expired_time) TINYINT NOT NULL"`
@@ -16,6 +17,11 @@ type TokenRecord struct {
 	CreatedUnixTime  int64          `xorm:"PK"`
 	ExpiredUnixTime  int64          `xorm:"INDEX(IDX_token_record_uid_type_expired_time) INDEX(IDX_token_record_expired_time)"`
 	LastSeenUnixTime int64
+}
+
+// MCPTokenContext represents the context data of an MCP token
+type MCPTokenContext struct {
+	EnabledTools int64 `json:"enabledTools,string"`
 }
 
 // OAuth2CallbackTokenContext represents the context data of oauth 2.0 callback token
@@ -33,8 +39,9 @@ type TokenGenerateAPIRequest struct {
 
 // TokenGenerateMCPRequest represents all parameters of mcp token generation request
 type TokenGenerateMCPRequest struct {
-	ExpiredInSeconds int64  `json:"expiresInSeconds" binding:"omitempty,min=0,max=4294967295"`
-	Password         string `json:"password" binding:"omitempty,min=6,max=128"`
+	EnabledTools     []string `json:"enabledTools"`
+	ExpiredInSeconds int64    `json:"expiresInSeconds" binding:"omitempty,min=0,max=4294967295"`
+	Password         string   `json:"password" binding:"omitempty,min=6,max=128"`
 }
 
 // TokenRevokeRequest represents all parameters of token revoking request
@@ -57,6 +64,7 @@ type TokenGenerateMCPResponse struct {
 // TokenRefreshResponse represents all response parameters of token refreshing
 type TokenRefreshResponse struct {
 	NewToken                 string                        `json:"newToken,omitempty"`
+	NewMapProxyToken         string                        `json:"newMapProxyToken,omitempty"`
 	OldTokenId               string                        `json:"oldTokenId,omitempty"`
 	User                     *UserBasicInfo                `json:"user"`
 	ApplicationCloudSettings *ApplicationCloudSettingSlice `json:"applicationCloudSettings,omitempty"`
@@ -72,8 +80,52 @@ type TokenInfoResponse struct {
 	IsCurrent bool           `json:"isCurrent"`
 }
 
+// GetUid returns the uid of the token record
+func (r *TokenRecord) GetUid() int64 {
+	return r.Uid
+}
+
+// GetUserTokenId returns the user token id of the token record
+func (r *TokenRecord) GetUserTokenId() int64 {
+	return r.UserTokenId
+}
+
+// GetTokenType returns the token type of the token record
+func (r *TokenRecord) GetTokenType() core.TokenType {
+	return r.TokenType
+}
+
+// GetSecret returns the secret of the token record
+func (r *TokenRecord) GetSecret() string {
+	return r.Secret
+}
+
+// GetContext returns the context of the token record
+func (r *TokenRecord) GetContext() string {
+	return r.Context
+}
+
+// GetCreatedUnixTime returns the created unix time of the token record
+func (r *TokenRecord) GetCreatedUnixTime() int64 {
+	return r.CreatedUnixTime
+}
+
+// GetExpiredUnixTime returns the expired unix time of the token record
+func (r *TokenRecord) GetExpiredUnixTime() int64 {
+	return r.ExpiredUnixTime
+}
+
 // TokenInfoResponseSlice represents the slice data structure of TokenInfoResponse
 type TokenInfoResponseSlice []*TokenInfoResponse
+
+// GetEnabledToolsMark returns the enabled tool mask
+func (c *MCPTokenContext) GetEnabledToolsMark() int64 {
+	if c == nil {
+		return core.MCPAllTools
+	}
+
+	return c.EnabledTools
+}
 
 // Len returns the count of items
 func (a TokenInfoResponseSlice) Len() int {

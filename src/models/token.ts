@@ -11,6 +11,7 @@ export interface TokenGenerateAPIRequest {
 }
 
 export interface TokenGenerateMCPRequest {
+    readonly enabledTools?: string[];
     readonly expiresInSeconds: number;
     readonly password: string;
 }
@@ -31,6 +32,7 @@ export interface TokenGenerateMCPResponse {
 
 export interface TokenRefreshResponse {
     readonly newToken?: string;
+    readonly newMapProxyToken?: string;
     readonly oldTokenId?: string;
     readonly user: UserBasicInfo;
     readonly applicationCloudSettings?: ApplicationCloudSetting[];

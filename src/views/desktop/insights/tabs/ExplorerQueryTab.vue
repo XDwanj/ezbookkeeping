@@ -97,7 +97,7 @@
                                 </div>
 
                                 <div v-else-if="element.conditions && element.conditions.length > 0 && !showExpression[element.id]">
-                                    <div :key="conditionIndex" v-for="(conditionWithRelation, conditionIndex) in element.conditions">
+                                    <div :key="conditionIndex" v-for="(conditionWithRelation, conditionIndex) in (element.conditions as TransactionExplorerConditionWithRelation[])">
                                         <div class="d-flex overflow-x-auto align-center gap-2 mb-3"
                                              :style="getConditionStyle(element, conditionIndex)"
                                              v-if="conditionWithRelation.relation !== TransactionExplorerConditionRelation.SubEnd">
@@ -136,6 +136,7 @@
                                                 density="compact"
                                                 item-title="name"
                                                 item-value="value"
+                                                :menu-props="{ contentClass: 'select-menu-large' }"
                                                 :disabled="loading || disabled || !!editingQuery"
                                                 :items="allTransactionExplorerConditionFields"
                                                 @update:model-value="updateConditionField(element, conditionIndex, TransactionExplorerConditionField.valueOf($event))"
@@ -147,6 +148,7 @@
                                                 density="compact"
                                                 item-title="name"
                                                 item-value="value"
+                                                :menu-props="{ contentClass: 'select-menu-medium' }"
                                                 :disabled="loading || disabled || !!editingQuery"
                                                 :items="getAllTransactionExplorerConditionOperators(conditionWithRelation.getSupportedOperators())"
                                                 v-model="conditionWithRelation.condition.operator"
@@ -161,7 +163,7 @@
                                                     :disabled="loading || disabled || !!editingQuery"
                                                     :placeholder="tt('None')"
                                                     :items="allAvailableDayOfWeekOptions"
-                                                    v-model="conditionWithRelation.condition.value"
+                                                    v-model="conditionWithRelation.condition.value as number[]"
                                                     v-if="conditionWithRelation.condition.field === TransactionExplorerConditionField.TransactionTimeDayOfWeek.value"
                                                 >
                                                     <template #item="{ props, internalItem }">
@@ -183,7 +185,7 @@
                                                     :disabled="loading || disabled || !!editingQuery"
                                                     :placeholder="tt('None')"
                                                     :items="allAvailableDayOfMonthOptions"
-                                                    v-model="conditionWithRelation.condition.value"
+                                                    v-model="conditionWithRelation.condition.value as number[]"
                                                     v-else-if="conditionWithRelation.condition.field === TransactionExplorerConditionField.TransactionTimeDayOfMonth.value"
                                                 >
                                                     <template #item="{ props, internalItem }">
@@ -205,7 +207,7 @@
                                                     :disabled="loading || disabled || !!editingQuery"
                                                     :placeholder="tt('None')"
                                                     :items="allAvailableMonthOfYearOptions"
-                                                    v-model="conditionWithRelation.condition.value"
+                                                    v-model="conditionWithRelation.condition.value as number[]"
                                                     v-else-if="conditionWithRelation.condition.field === TransactionExplorerConditionField.TransactionTimeMonthOfYear.value"
                                                 >
                                                     <template #item="{ props, internalItem }">
@@ -227,7 +229,7 @@
                                                     :disabled="loading || disabled || !!editingQuery"
                                                     :placeholder="tt('None')"
                                                     :items="allAvailableHourOfDayOptions"
-                                                    v-model="conditionWithRelation.condition.value"
+                                                    v-model="conditionWithRelation.condition.value as number[]"
                                                     v-else-if="conditionWithRelation.condition.field === TransactionExplorerConditionField.TransactionTimeHourOfDay.value"
                                                 >
                                                     <template #item="{ props, internalItem }">
@@ -278,7 +280,7 @@
                                                         { type: TransactionType.Income, displayName: tt('Income') },
                                                         { type: TransactionType.Transfer, displayName: tt('Transfer') }
                                                     ]"
-                                                    v-model="conditionWithRelation.condition.value"
+                                                    v-model="conditionWithRelation.condition.value as number[]"
                                                     v-else-if="conditionWithRelation.condition.field === TransactionExplorerConditionField.TransactionType.value"
                                                 >
                                                     <template #item="{ props, internalItem }">
@@ -465,10 +467,8 @@
                                     </div>
                                 </div>
                                 <div v-else-if="element.conditions && element.conditions.length > 0 && showExpression[element.id]">
-                                    <div class="w-100 code-container">
-                                        <v-textarea class="w-100 always-cursor-text mb-4" :readonly="true"
-                                                    :value="getExpression(element, index)"></v-textarea>
-                                    </div>
+                                    <v-textarea class="w-100 code-textarea always-cursor-text mb-4" :readonly="true"
+                                                :value="getExpression(element, index)"></v-textarea>
                                 </div>
 
                                 <v-btn class="px-2" density="comfortable" color="primary" variant="text"
@@ -499,17 +499,13 @@
                                      :selected-category-ids="isArray(currentCondition?.value) ? currentCondition?.value as string[] : []"
                                      v-model:show="showFilterTransactionCategoriesDialog"
                                      @settings:change="updateTransactionCategories" />
-
-    <snack-bar ref="snackbar" />
 </template>
 
 <script setup lang="ts">
 import AccountFilterSettingsDialog from '@/views/desktop/common/dialogs/AccountFilterSettingsDialog.vue';
 import CategoryFilterSettingsDialog from '@/views/desktop/common/dialogs/CategoryFilterSettingsDialog.vue';
 
-import SnackBar from '@/components/desktop/SnackBar.vue';
-
-import { ref, computed, useTemplateRef, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 import { useI18n } from '@/locales/helpers.ts';
 
@@ -518,6 +514,7 @@ import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
 import { useExplorersStore } from '@/stores/explorer.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import { type NameValue, type TypeAndDisplayName, values } from '@/core/base.ts';
 import { AccountType } from '@/core/account.ts';
@@ -534,6 +531,7 @@ import {
 } from '@/consts/timezone.ts';
 
 import {
+    type TransactionExplorerConditionWithRelation,
     type TransactionExplorerCondition,
     TransactionExplorerQuery,
     TransactionExplorerGeoLocationCondition
@@ -564,8 +562,6 @@ interface ExplorerQueryTabProps {
     disabled?: boolean;
 }
 
-type SnackBarType = InstanceType<typeof SnackBar>;
-
 const props = defineProps<ExplorerQueryTabProps>();
 
 const {
@@ -585,8 +581,7 @@ const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const transactionTagsStore = useTransactionTagsStore();
 const explorersStore = useExplorersStore();
-
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
+const desktopPageStore = useDesktopPageStore();
 
 const currentCondition = ref<TransactionExplorerCondition | undefined>(undefined);
 const showExpression = ref<Record<string, boolean>>({});
@@ -882,7 +877,7 @@ function getExpression(query: TransactionExplorerQuery, queryIndex: number): str
         return query.toExpression(transactionCategoriesStore.allTransactionCategoriesMap, accountsStore.allAccountsMap, transactionTagsStore.allTransactionTagsMap);
     } catch (ex) {
         logger.error('failed to generate expression for exploration query#' + queryIndex, ex);
-        snackbar.value?.showError(tt('Failed to generate expression'));
+        desktopPageStore.addErrorToast(tt('Failed to generate expression'));
         return tt('Failed to generate expression');
     }
 }

@@ -86,16 +86,20 @@
 
                                 <v-row>
                                     <v-col cols="12" md="12">
-                                        <language-select :disabled="submitting || navigateToHomePage"
+                                        <language-select :disabled="submitting || settingLanguage || navigateToHomePage"
                                                          :label="languageTitle"
                                                          :placeholder="languageTitle"
-                                                         :use-model-value="true" v-model="currentLocale" />
+                                                         :loading="settingLanguage"
+                                                         :use-model-value="true"
+                                                         :model-value="user.language"
+                                                         @update:model-value="changeLanguage" />
                                     </v-col>
                                 </v-row>
 
                                 <v-row>
                                     <v-col cols="12" md="6">
-                                        <currency-select :disabled="submitting || navigateToHomePage"
+                                        <currency-select :menu-props="{ contentClass: 'select-menu-large' }"
+                                                         :disabled="submitting || navigateToHomePage"
                                                          :label="tt('Default Currency')"
                                                          :placeholder="tt('Default Currency')"
                                                          v-model="user.defaultCurrency" />
@@ -113,6 +117,32 @@
                                         />
                                     </v-col>
                                 </v-row>
+
+                                <v-row>
+                                    <v-col cols="12" md="6">
+                                        <v-select
+                                            item-title="displayName"
+                                            item-value="type"
+                                            :disabled="submitting || navigateToHomePage"
+                                            :label="tt('Expense Amount Color')"
+                                            :placeholder="tt('Expense Amount Color')"
+                                            :items="allExpenseAmountColorTypes"
+                                            v-model="user.expenseAmountColor"
+                                        />
+                                    </v-col>
+
+                                    <v-col cols="12" md="6">
+                                        <v-select
+                                            item-title="displayName"
+                                            item-value="type"
+                                            :disabled="submitting || navigateToHomePage"
+                                            :label="tt('Income Amount Color')"
+                                            :placeholder="tt('Income Amount Color')"
+                                            :items="allIncomeAmountColorTypes"
+                                            v-model="user.incomeAmountColor"
+                                        />
+                                    </v-col>
+                                </v-row>
                             </v-window-item>
 
                             <v-window-item value="presetCategories">
@@ -126,12 +156,15 @@
                                                   v-model="usePresetCategories"/>
                                     </v-col>
                                     <v-col cols="12" sm="6" class="text-end-sm">
-                                        <language-select-button :disabled="submitting || navigateToHomePage"
-                                                                :use-model-value="true" v-model="currentLocale" />
+                                        <language-select-button :disabled="submitting || settingLanguage || navigateToHomePage"
+                                                                :loading="settingLanguage"
+                                                                :use-model-value="true"
+                                                                :model-value="user.language"
+                                                                @update:model-value="changeLanguage" />
                                     </v-col>
                                 </v-row>
 
-                                <div class="overflow-y-auto pe-1" :class="{ 'disabled': !usePresetCategories || submitting || navigateToHomePage }" style="max-height: 323px">
+                                <div class="overflow-y-auto pe-1" :class="{ 'disabled': !usePresetCategories || submitting || settingLanguage || navigateToHomePage }" style="max-height: 323px">
                                     <v-row :key="categoryType" v-for="(categories, categoryType) in allPresetCategories">
                                         <v-col cols="12" md="12">
                                             <span class="text-body-large">{{ getCategoryTypeName(parseInt(categoryType)) }}</span>
@@ -173,16 +206,16 @@
                     <div class="d-flex justify-sm-space-between gap-4 flex-wrap justify-center mt-5">
                         <v-btn class="button-icon-with-direction"
                                :color="(currentStep === 'basicSetting' || currentStep === 'finalResult') ? 'default' : 'primary'"
-                               :disabled="currentStep === 'basicSetting' || currentStep === 'finalResult' || submitting || navigateToHomePage"
+                               :disabled="currentStep === 'basicSetting' || currentStep === 'finalResult' || submitting || settingLanguage || navigateToHomePage"
                                :prepend-icon="mdiArrowLeft"
                                @click="switchToPreviousTab">{{ tt('Previous') }}</v-btn>
                         <v-btn class="button-icon-with-direction" color="primary"
-                               :disabled="submitting || navigateToHomePage"
+                               :disabled="submitting || settingLanguage || navigateToHomePage"
                                :append-icon="mdiArrowRight"
                                @click="switchToNextTab"
                                v-if="currentStep === 'basicSetting'">{{ tt('Next') }}</v-btn>
                         <v-btn color="teal"
-                               :disabled="submitting || navigateToHomePage"
+                               :disabled="submitting || settingLanguage || navigateToHomePage"
                                :append-icon="!submitting ? mdiCheck : undefined"
                                @click="submit"
                                v-if="currentStep === 'presetCategories'">
@@ -197,22 +230,20 @@
                 </v-card>
             </v-col>
         </v-row>
-
-        <snack-bar ref="snackbar" @update:show="onSnackbarShowStateChanged" />
     </div>
 </template>
 
 <script setup lang="ts">
-import SnackBar from '@/components/desktop/SnackBar.vue';
 import type { StepBarItem } from '@/components/desktop/StepsBar.vue';
 
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { useI18n } from '@/locales/helpers.ts';
 import { useSignupPageBase } from '@/views/base/SignupPageBase.ts';
 
 import { useRootStore } from '@/stores/index.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import type { TypeAndDisplayName } from '@/core/base.ts';
 import { type LocalizedPresetCategory } from '@/core/category.ts';
@@ -221,6 +252,7 @@ import { APPLICATION_LOGO_PATH } from '@/consts/asset.ts';
 import { categorizedArrayToPlainArray } from '@/lib/common.ts';
 import { getCategoryIconType } from '@/lib/icon.ts';
 import { isUserLogined } from '@/lib/userstate.ts';
+import logger from '@/lib/logger.ts';
 
 import {
     mdiArrowLeft,
@@ -228,26 +260,26 @@ import {
     mdiCheck
 } from '@mdi/js';
 
-type SnackBarType = InstanceType<typeof SnackBar>;
-
 const router = useRouter();
 
 const { tt, getAllWeekDays, getAllTransactionDefaultCategories } = useI18n();
 
 const {
     user,
+    settingLanguage,
     submitting,
+    allExpenseAmountColorTypes,
+    allIncomeAmountColorTypes,
     languageTitle,
-    currentLocale,
     inputEmptyProblemMessage,
     inputInvalidProblemMessage,
+    updateLanguage,
     getCategoryTypeName,
     doAfterSignupSuccess
 } = useSignupPageBase();
 
 const rootStore = useRootStore();
-
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
+const desktopPageStore = useDesktopPageStore();
 
 const currentStep = ref<string>('basicSetting');
 const usePresetCategories = ref<boolean>(false);
@@ -255,7 +287,7 @@ const finalResultMessage = ref<string | null>(null);
 const navigateToHomePage = ref<boolean>(false);
 
 const allWeekDays = computed<TypeAndDisplayName[]>(() => getAllWeekDays());
-const allPresetCategories = computed<Record<string, LocalizedPresetCategory[]>>(() => getAllTransactionDefaultCategories(0, currentLocale.value));
+const allPresetCategories = computed<Record<string, LocalizedPresetCategory[]>>(() => getAllTransactionDefaultCategories(0, user.value.language));
 
 const allSteps = computed<StepBarItem[]>(() => {
     const allSteps = [
@@ -293,7 +325,7 @@ function switchToTab(tabName: string): void {
         const problemMessage = inputEmptyProblemMessage.value || inputInvalidProblemMessage.value;
 
         if (problemMessage) {
-            snackbar.value?.showMessage(problemMessage);
+            desktopPageStore.addToast(problemMessage);
             return;
         }
 
@@ -313,7 +345,7 @@ function submit(): void {
     const problemMessage = inputEmptyProblemMessage.value || inputInvalidProblemMessage.value;
 
     if (problemMessage) {
-        snackbar.value?.showMessage(problemMessage);
+        desktopPageStore.addToast(problemMessage);
         return;
     }
 
@@ -340,40 +372,43 @@ function submit(): void {
                 finalResultMessage.value = tt('You have been successfully registered. An account activation link has been sent to your email address, please activate your account first.');
                 currentStep.value = 'finalResult';
             } else {
-                snackbar.value?.showMessage('You have been successfully registered');
+                desktopPageStore.addToast('You have been successfully registered');
                 navigateToHomePage.value = true;
+                router.replace('/');
             }
 
             return;
         }
 
-        doAfterSignupSuccess(response);
-        submitting.value = false;
+        doAfterSignupSuccess(response).then(() => {
+            submitting.value = false;
 
-        if (usePresetCategories.value && !response.presetCategoriesSaved) {
-            snackbar.value?.showMessage('You have been successfully registered, but there was an failure when adding preset categories. You can re-add preset categories in settings page anytime.');
-        } else {
-            snackbar.value?.showMessage('You have been successfully registered');
+            if (usePresetCategories.value && !response.presetCategoriesSaved) {
+                desktopPageStore.addToast('You have been successfully registered, but there was an failure when adding preset categories. You can re-add preset categories in settings page anytime.');
+            } else {
+                desktopPageStore.addToast('You have been successfully registered');
+            }
+
+            navigateToHomePage.value = true;
             router.replace('/');
-        }
-
-        navigateToHomePage.value = true;
+        });
     }).catch(error => {
         submitting.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
+    });
+}
+
+function changeLanguage(languageTag: string): void {
+    updateLanguage(languageTag).catch(error => {
+        logger.error('failed to set language', error);
+        desktopPageStore.addErrorToast(error);
     });
 }
 
 function navigateToLogin(): void {
     router.push('/');
-}
-
-function onSnackbarShowStateChanged(newValue: boolean): void {
-    if (!newValue && navigateToHomePage.value) {
-        router.replace('/');
-    }
 }
 </script>

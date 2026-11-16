@@ -118,6 +118,7 @@
                                        secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
                                        secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="category" secondary-color-field="color"
                                        secondary-hidden-field="hidden"
+                                       :menu-props="{ contentClass: 'two-column-select-menu select-menu-x-large' }"
                                        :disabled="!!disabled || !hasVisibleExpenseCategories"
                                        :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
                                        :show-selection-primary-text="true"
@@ -136,6 +137,7 @@
                                        secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
                                        secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="category" secondary-color-field="color"
                                        secondary-hidden-field="hidden"
+                                       :menu-props="{ contentClass: 'two-column-select-menu select-menu-x-large' }"
                                        :disabled="!!disabled || !hasVisibleIncomeCategories"
                                        :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
                                        :show-selection-primary-text="true"
@@ -154,6 +156,7 @@
                                        secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
                                        secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="category" secondary-color-field="color"
                                        secondary-hidden-field="hidden"
+                                       :menu-props="{ contentClass: 'two-column-select-menu select-menu-x-large' }"
                                        :disabled="!!disabled || !hasVisibleTransferCategories"
                                        :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
                                        :show-selection-primary-text="true"
@@ -219,6 +222,7 @@
                                        secondary-key-field="id" secondary-value-field="id"
                                        secondary-title-field="name" secondary-footer-field="displayBalance"
                                        secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="account" secondary-color-field="color"
+                                       :menu-props="{ contentClass: 'two-column-select-menu select-menu-x-large' }"
                                        :disabled="!!disabled || !allVisibleAccounts.length"
                                        :enable-filter="true" :filter-placeholder="tt('Find account')" :filter-no-items-text="tt('No available account')"
                                        :custom-selection-primary-text="getSourceAccountDisplayName(item)"
@@ -236,6 +240,7 @@
                                        secondary-key-field="id" secondary-value-field="id"
                                        secondary-title-field="name" secondary-footer-field="displayBalance"
                                        secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="account" secondary-color-field="color"
+                                       :menu-props="{ contentClass: 'two-column-select-menu select-menu-x-large' }"
                                        :disabled="!!disabled || !allVisibleAccounts.length"
                                        :enable-filter="true" :filter-placeholder="tt('Find account')" :filter-no-items-text="tt('No available account')"
                                        :custom-selection-primary-text="getDestinationAccountDisplayName(item)"
@@ -416,12 +421,10 @@
     <batch-replace-dialog ref="batchReplaceDialog" />
     <batch-apply-rules-dialog ref="batchApplyRulesDialog" />
     <batch-create-dialog ref="batchCreateDialog" />
-    <snack-bar ref="snackbar" />
 </template>
 
 <script setup lang="ts">
 import PaginationButtons from '@/components/desktop/PaginationButtons.vue';
-import SnackBar from '@/components/desktop/SnackBar.vue';
 import BatchReplaceDialog, { type BatchReplaceDialogDataType } from '../dialogs/BatchReplaceDialog.vue';
 import BatchApplyRulesDialog from '../dialogs/BatchApplyRulesDialog.vue';
 import BatchCreateDialog, { type BatchCreateDialogDataType } from '../dialogs/BatchCreateDialog.vue';
@@ -437,6 +440,7 @@ import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
 import { useExchangeRatesStore } from '@/stores/exchangeRates.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import { type NameValue, type NameNumeralValue, itemAndIndex, reversed, keys } from '@/core/base.ts';
 import { DecimalSeparator, AmountFilterType } from '@/core/numeral.ts';
@@ -452,6 +456,7 @@ import { Account, type CategorizedAccountWithDisplayBalance } from '@/models/acc
 import type { TransactionCategory } from '@/models/transaction_category.ts';
 import { TransactionTag } from '@/models/transaction_tag.ts';
 import { ImportTransaction } from '@/models/imported_transaction.ts';
+import type { ImportTransactionReplaceRule } from '@/models/rule.ts';
 
 import {
     isString,
@@ -496,7 +501,6 @@ import {
     mdiKeyboardTab
 } from '@mdi/js';
 
-type SnackBarType = InstanceType<typeof SnackBar>;
 type BatchReplaceDialogType = InstanceType<typeof BatchReplaceDialog>;
 type BatchApplyRulesDialogType = InstanceType<typeof BatchApplyRulesDialog>;
 type BatchCreateDialogType = InstanceType<typeof BatchCreateDialog>;
@@ -555,8 +559,8 @@ const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const transactionTagsStore = useTransactionTagsStore();
 const exchangeRatesStore = useExchangeRatesStore();
+const desktopPageStore = useDesktopPageStore();
 
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
 const batchReplaceDialog = useTemplateRef<BatchReplaceDialogType>('batchReplaceDialog');
 const batchApplyRulesDialog = useTemplateRef<BatchApplyRulesDialogType>('batchApplyRulesDialog');
 const batchCreateDialog = useTemplateRef<BatchCreateDialogType>('batchCreateDialog');
@@ -1828,7 +1832,7 @@ function showBatchReplaceDialog(type: BatchReplaceDialogDataType, allSourceTagIt
         }
 
         if (updatedCount > 0) {
-            snackbar.value?.showMessage('format.misc.youHaveUpdatedTransactions', {
+            desktopPageStore.addToast('format.misc.youHaveUpdatedTransactions', {
                 count: formatNumberToLocalizedNumerals(updatedCount)
             });
         }
@@ -1891,7 +1895,7 @@ function showBatchAddDialog(type: BatchReplaceDialogDataType): void {
         }
 
         if (updatedCount > 0) {
-            snackbar.value?.showMessage('format.misc.youHaveUpdatedTransactions', {
+            desktopPageStore.addToast('format.misc.youHaveUpdatedTransactions', {
                 count: formatNumberToLocalizedNumerals(updatedCount)
             });
         }
@@ -1991,14 +1995,14 @@ function showReplaceInvalidItemDialog(type: BatchReplaceDialogDataType, invalidI
         }
 
         if (updatedCount > 0) {
-            snackbar.value?.showMessage('format.misc.youHaveUpdatedTransactions', {
+            desktopPageStore.addToast('format.misc.youHaveUpdatedTransactions', {
                 count: formatNumberToLocalizedNumerals(updatedCount)
             });
         }
     });
 }
 
-function showBatchApplyRulesDialog(): void {
+function showBatchApplyRulesDialog(initialRules: ImportTransactionReplaceRule[]): void {
     if (isEditing.value) {
         return;
     }
@@ -2010,6 +2014,7 @@ function showBatchApplyRulesDialog(): void {
         sourceAccountNames: allOriginalSourceAccountNames.value,
         destinationAccountNames: allOriginalDestinationAccountNames.value,
         tagNames: allOriginalTransactionTagNames.value,
+        initialRules: initialRules,
         selectedTransactionCount: selectedImportTransactionCount.value
     }).then(result => {
         if (!result || !result.rules || !result.scope) {
@@ -2026,7 +2031,7 @@ function showBatchApplyRulesDialog(): void {
         });
 
         if (applyResult.updatedTransactionCount > 0) {
-            snackbar.value?.showMessage('format.misc.youHaveUpdatedTransactions', {
+            desktopPageStore.addToast('format.misc.youHaveUpdatedTransactions', {
                 count: formatNumberToLocalizedNumerals(applyResult.updatedTransactionCount)
             });
         }
@@ -2096,10 +2101,25 @@ function showBatchCreateInvalidItemDialog(type: BatchCreateDialogDataType, inval
         }
 
         if (updatedCount > 0) {
-            snackbar.value?.showMessage('format.misc.youHaveUpdatedTransactions', {
+            desktopPageStore.addToast('format.misc.youHaveUpdatedTransactions', {
                 count: formatNumberToLocalizedNumerals(updatedCount)
             });
         }
+    });
+}
+
+function applyPresetRules(rules: ImportTransactionReplaceRule[]): void {
+    if (!rules.length) {
+        return;
+    }
+
+    applyImportTransactionReplaceRules(props.importTransactions || [], rules, 'all', {
+        allCategoriesMap: allCategoriesMap.value,
+        allSecondaryCategoriesMapByName: allSecondaryCategoriesMapByName.value,
+        allAccountsMap: allAccountsMap.value,
+        allAccountsMapByName: allAccountsMapByName.value,
+        allTagsMap: allTagsMap.value,
+        updateTransaction: updateTransactionData
     });
 }
 
@@ -2210,7 +2230,7 @@ function focusTableScrollContainerWhenNonEditing(event: MouseEvent): void {
 }
 
 function onShowDateRangeError(message: string): void {
-    snackbar.value?.showError(message);
+    desktopPageStore.addErrorToast(message);
 }
 
 function reset(): void {
@@ -2245,6 +2265,7 @@ defineExpose({
     canImport,
     showBatchApplyRulesDialog,
     updateAllTransactionsIsValid,
+    applyPresetRules,
     reset,
     setCountPerPage
 });

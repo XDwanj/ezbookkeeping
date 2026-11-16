@@ -38,6 +38,11 @@ type mcpQueryAllAccountsBalanceToolHandler struct{}
 
 var MCPQueryAllAccountsBalanceToolHandler = &mcpQueryAllAccountsBalanceToolHandler{}
 
+// ToolType returns the MCP tool type
+func (h *mcpQueryAllAccountsBalanceToolHandler) ToolType() core.MCPToolType {
+	return core.MCP_TOOL_TYPE_QUERY_ALL_ACCOUNTS_BALANCE
+}
+
 // Name returns the name of the MCP tool
 func (h *mcpQueryAllAccountsBalanceToolHandler) Name() string {
 	return "query_all_accounts_balance"
@@ -46,6 +51,21 @@ func (h *mcpQueryAllAccountsBalanceToolHandler) Name() string {
 // Description returns the description of the MCP tool
 func (h *mcpQueryAllAccountsBalanceToolHandler) Description() string {
 	return "Query all accounts balance for the current user in ezBookkeeping."
+}
+
+// DataOperationType returns how the MCP tool operates on business records
+func (h *mcpQueryAllAccountsBalanceToolHandler) DataOperationType() MCPToolDataOperationType {
+	return MCP_TOOL_DATA_OPERATION_READ_ONLY
+}
+
+// IsIdempotent returns whether repeated calls with the same arguments have no additional effects
+func (h *mcpQueryAllAccountsBalanceToolHandler) IsIdempotent() bool {
+	return true
+}
+
+// DependsOnExternalData returns whether the MCP tool may depend on third-party data
+func (h *mcpQueryAllAccountsBalanceToolHandler) DependsOnExternalData() bool {
+	return false
 }
 
 // InputType returns the input type for the MCP tool request

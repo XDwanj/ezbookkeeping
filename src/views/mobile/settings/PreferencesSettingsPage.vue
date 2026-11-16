@@ -189,6 +189,14 @@
                     <f7-toggle :checked="showTagInTransactionListPage" @toggle:change="showTagInTransactionListPage = $event"></f7-toggle>
                 </template>
             </f7-list-item>
+            <f7-list-item>
+                <template #after-title>
+                    {{ tt('Show Transaction Picture Indicator') }}
+                </template>
+                <template #after>
+                    <f7-toggle :checked="showPictureIndicatorInTransactionListPage" @toggle:change="showPictureIndicatorInTransactionListPage = $event"></f7-toggle>
+                </template>
+            </f7-list-item>
             <f7-list-item
                 link="#"
                 class="item-truncate-after-text"
@@ -315,6 +323,15 @@
                 </template>
                 <template #after>
                     <f7-toggle :checked="isAutoGetCurrentGeoLocation" @toggle:change="isAutoGetCurrentGeoLocation = $event"></f7-toggle>
+                </template>
+            </f7-list-item>
+
+            <f7-list-item>
+                <template #after-title>
+                    {{ tt('Show Selected Tags on Top in Tag Picker') }}
+                </template>
+                <template #after>
+                    <f7-toggle :checked="showSelectedTagsOnTopInMobile" @toggle:change="showSelectedTagsOnTopInMobile = $event"></f7-toggle>
                 </template>
             </f7-list-item>
 
@@ -531,6 +548,7 @@ const {
     showTotalAmountInTransactionListPage,
     totalAmountTypeInTransactionListPage,
     showTagInTransactionListPage,
+    showPictureIndicatorInTransactionListPage,
     defaultKeywordMatchModeInTransactionListPage,
     autoSaveTransactionDraft,
     isAutoGetCurrentGeoLocation,
@@ -575,6 +593,11 @@ const quickSaveButtonStyleInMobileTransactionListPage = computed<number>({
 const quickAddButtonActionInMobileTransactionEditPage = computed<number>({
     get: () => settingsStore.appSettings.quickAddButtonActionInMobileTransactionEditPage,
     set: (value) => settingsStore.setQuickAddButtonActionInMobileTransactionEditPage(value)
+});
+
+const showSelectedTagsOnTopInMobile = computed<boolean>({
+    get: () => settingsStore.appSettings.showSelectedTagsOnTopInMobile,
+    set: (value) => settingsStore.setShowSelectedTagsOnTopInMobile(value)
 });
 
 const alwaysShowTransactionPicturesInMobileTransactionEditPage = computed<boolean>({

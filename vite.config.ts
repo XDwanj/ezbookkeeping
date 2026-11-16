@@ -288,6 +288,14 @@ export default defineConfig(() => {
                                 test: /[\\/]node_modules[\\/](echarts|zrender|tslib|resize-detector)[\\/]/i
                             },
                             {
+                                name:  'ua-parser',
+                                test: /[\\/]node_modules[\\/]ua-parser-js[\\/]/i
+                            },
+                            {
+                                name:  'chardet',
+                                test: /[\\/]node_modules[\\/]chardet[\\/]/i
+                            },
+                            {
                                 name: 'monaco-editor',
                                 test: /[\\/]node_modules[\\/](monaco-editor|monaco-editor-core)[\\/]/i
                             },
@@ -324,16 +332,12 @@ export default defineConfig(() => {
                                         return true;
                                     } else if (/[\\/]src[\\/]views[\\/]base[\\/]/i.test(id)) {
                                         return true;
-                                    } else if (/[\\/]src[\\/]locales[\\/]helpers\.(js|ts)/i.test(id)) {
+                                    } else if (/[\\/]src[\\/]locales[\\/](helpers|index)\.(js|ts)/i.test(id)) {
                                         return true;
                                     } else {
                                         return false;
                                     }
                                 }
-                            },
-                            {
-                                name:  'locales',
-                                test: /[\\/]src[\\/]locales[\\/]/i
                             }
                         ]
                     }

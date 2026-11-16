@@ -205,6 +205,41 @@ func TestMT940DataReaderParse_InformationToAccountOwnerMoreThanSixLine(t *testin
 	assert.Equal(t, "Additional Info Line 6", actualData.Statements[0].InformationToAccountOwner[5])
 }
 
+func TestMT940DataReaderParse_InformationToAccountOwnerPreserveSpaces(t *testing.T) {
+	reader := &mt940DataReader{
+		allLines: []string{
+			":61:250601D123,45NTRFTEST",
+			"  :86:  Payment reference  ",
+			" Continued details  ",
+		},
+	}
+	context := core.NewNullContext()
+
+	actualData, err := reader.read(context)
+	assert.Nil(t, err)
+
+	assert.Equal(t, 1, len(actualData.Statements))
+	assert.Equal(t, []string{"  Payment reference  ", " Continued details  "}, actualData.Statements[0].InformationToAccountOwner)
+}
+
+func TestMT940DataReaderParse_InformationToAccountOwnerAfterClosingBalance(t *testing.T) {
+	reader := &mt940DataReader{
+		allLines: []string{
+			":61:250601D123,45NTRFTEST",
+			":86:First Transaction",
+			":62F:C250601CNY1111,11",
+			":86:Statement Information",
+		},
+	}
+	context := core.NewNullContext()
+
+	actualData, err := reader.read(context)
+	assert.Nil(t, err)
+
+	assert.Equal(t, 1, len(actualData.Statements))
+	assert.Equal(t, []string{"First Transaction"}, actualData.Statements[0].InformationToAccountOwner)
+}
+
 func TestMT940DataReaderParse_DuplicateBlockHeader(t *testing.T) {
 	reader := &mt940DataReader{
 		allLines: []string{
@@ -256,14 +291,14 @@ func TestMT940DataReaderParseBalance_ValidBalance(t *testing.T) {
 	reader := &mt940DataReader{}
 	context := core.NewNullContext()
 
-	balance, err := reader.parseBalance(context, "C250601CNY1234,56")
+	balance, err := reader.parseBalance(context, "line:1", "C250601CNY1234,56")
 	assert.Nil(t, err)
 	assert.Equal(t, MT_MARK_CREDIT, balance.DebitCreditMark)
 	assert.Equal(t, "250601", balance.Date)
 	assert.Equal(t, "CNY", balance.Currency)
 	assert.Equal(t, "1234,56", balance.Amount)
 
-	balance, err = reader.parseBalance(context, "D250602USD2345,67")
+	balance, err = reader.parseBalance(context, "line:1", "D250602USD2345,67")
 	assert.Nil(t, err)
 	assert.Equal(t, MT_MARK_DEBIT, balance.DebitCreditMark)
 	assert.Equal(t, "250602", balance.Date)
@@ -275,10 +310,10 @@ func TestMT940DataReaderParseBalance_InvalidBalance(t *testing.T) {
 	reader := &mt940DataReader{}
 	context := core.NewNullContext()
 
-	_, err := reader.parseBalance(context, "X250601CNY1234,56")
+	_, err := reader.parseBalance(context, "line:1", "X250601CNY1234,56")
 	assert.EqualError(t, err, errs.ErrTransactionTypeInvalid.Message)
 
-	_, err = reader.parseBalance(context, "C")
+	_, err = reader.parseBalance(context, "line:1", "C")
 	assert.EqualError(t, err, errs.ErrInvalidMT940File.Message)
 }
 
@@ -286,7 +321,7 @@ func TestMT940DataReaderParseStatement_ValidFields(t *testing.T) {
 	reader := &mt940DataReader{}
 	context := core.NewNullContext()
 
-	statement, err := reader.parseStatement(context, "2506010602RDY123,45NTRFTEST//ABC123456")
+	statement, err := reader.parseStatement(context, "line:1", "2506010602RDY123,45NTRFTEST//ABC123456")
 	assert.Nil(t, err)
 	assert.Equal(t, "250601", statement.ValueDate)
 	assert.Equal(t, "0602", statement.EntryDate)
@@ -297,7 +332,7 @@ func TestMT940DataReaderParseStatement_ValidFields(t *testing.T) {
 	assert.Equal(t, "TEST", statement.ReferenceForAccountOwner)
 	assert.Equal(t, "ABC123456", statement.ReferenceOfAccountServicingInstitution)
 
-	statement, err = reader.parseStatement(context, "250601RC234,56NSTFFOOBAR")
+	statement, err = reader.parseStatement(context, "line:1", "250601RC234,56NSTFFOOBAR")
 	assert.Nil(t, err)
 	assert.Equal(t, "250601", statement.ValueDate)
 	assert.Equal(t, "", statement.EntryDate)
@@ -311,7 +346,7 @@ func TestMT940DataReaderParseStatement_InvalidField(t *testing.T) {
 	reader := &mt940DataReader{}
 	context := core.NewNullContext()
 
-	_, err := reader.parseStatement(context, "250601X123,45NTRFTest")
+	_, err := reader.parseStatement(context, "line:1", "250601X123,45NTRFTest")
 	assert.EqualError(t, err, errs.ErrTransactionTypeInvalid.Message)
 }
 
@@ -320,22 +355,22 @@ func TestMT940DataReaderParseStatement_MissingField(t *testing.T) {
 	context := core.NewNullContext()
 
 	// Missing entry date
-	_, err := reader.parseStatement(context, "2406")
+	_, err := reader.parseStatement(context, "line:1", "2406")
 	assert.EqualError(t, err, errs.ErrInvalidMT940File.Message)
 
 	// Missing debit/credit mark
-	_, err = reader.parseStatement(context, "250601060234,56NTRFTEST//ABC123456")
+	_, err = reader.parseStatement(context, "line:1", "250601060234,56NTRFTEST//ABC123456")
 	assert.EqualError(t, err, errs.ErrTransactionTypeInvalid.Message)
 
 	// Missing amount
-	_, err = reader.parseStatement(context, "250601DNTRFTEST//ABC123456")
+	_, err = reader.parseStatement(context, "line:1", "250601DNTRFTEST//ABC123456")
 	assert.EqualError(t, err, errs.ErrAmountInvalid.Message)
 
 	// Missing transaction type identification code
-	_, err = reader.parseStatement(context, "250601D234,56TEST//ABC123456")
+	_, err = reader.parseStatement(context, "line:1", "250601D234,56TEST//ABC123456")
 	assert.EqualError(t, err, errs.ErrInvalidMT940File.Message)
 
 	// Missing reference for account owner
-	_, err = reader.parseStatement(context, "250601D234,56NTRF//ABC123456")
+	_, err = reader.parseStatement(context, "line:1", "250601D234,56NTRF//ABC123456")
 	assert.EqualError(t, err, errs.ErrInvalidMT940File.Message)
 }

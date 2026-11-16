@@ -111,8 +111,7 @@
                         <td class=" text-right">
                             <v-btn density="comfortable" variant="tonal"
                                    :disabled="loggingInByOAuth2"
-                                   :href="oauth2LinkUrl"
-                                   @click="loggingInByOAuth2 = true"
+                                   @click="linkExternalAuth"
                                    v-if="!thirdPartyLogin.linked && isOAuth2Enabled() && getOAuth2Provider() === thirdPartyLogin.externalAuthType">
                                 {{ tt('Link') }}
                                 <v-progress-circular indeterminate size="22" class="ms-2" v-if="loggingInByOAuth2"></v-progress-circular>
@@ -196,13 +195,11 @@
     <unlink-third-party-login-dialog ref="unlinkThirdPartyLoginDialog" />
     <user-generate-token-dialog ref="generateTokenDialog" />
     <confirm-dialog ref="confirmDialog"/>
-    <snack-bar ref="snackbar" />
 </template>
 
 <script setup lang="ts">
 import { VTextField } from 'vuetify/components/VTextField';
 import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
-import SnackBar from '@/components/desktop/SnackBar.vue';
 import UnlinkThirdPartyLoginDialog from './settings/dialogs/UnlinkThirdPartyLoginDialog.vue';
 import UserGenerateTokenDialog from './settings/dialogs/UserGenerateTokenDialog.vue';
 
@@ -214,6 +211,7 @@ import { useRootStore } from '@/stores/index.ts';
 import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserExternalAuthStore } from '@/stores/userExternalAuth.ts';
 import { useTokensStore } from '@/stores/token.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import { itemAndIndex, reversedItemAndIndex } from '@/core/base.ts';
 import { KnownErrorCode } from '@/consts/api.ts';
@@ -307,7 +305,6 @@ class DesktopPageSessionInfo extends SessionInfo {
 type UnlinkThirdPartyLoginDialogType = InstanceType<typeof UnlinkThirdPartyLoginDialog>;
 type UserGenerateTokenDialogType = InstanceType<typeof UserGenerateTokenDialog>;
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
-type SnackBarType = InstanceType<typeof SnackBar>;
 
 const {
     tt,
@@ -320,13 +317,13 @@ const rootStore = useRootStore();
 const settingsStore = useSettingsStore();
 const userExternalAuthStore = useUserExternalAuthStore();
 const tokensStore = useTokensStore();
+const desktopPageStore = useDesktopPageStore();
 
 const newPasswordInput = useTemplateRef<VTextField>('newPasswordInput');
 const confirmPasswordInput = useTemplateRef<VTextField>('confirmPasswordInput');
 const unlinkThirdPartyLoginDialog = useTemplateRef<UnlinkThirdPartyLoginDialogType>('unlinkThirdPartyLoginDialog');
 const generateTokenDialog = useTemplateRef<UserGenerateTokenDialogType>('generateTokenDialog');
 const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
 
 const externalAuths = ref<UserExternalAuthInfoResponse[]>([]);
 const tokens = ref<TokenInfoResponse[]>([]);
@@ -338,8 +335,6 @@ const loadingExternalAuth = ref<boolean>(true);
 const loadingSession = ref<boolean>(true);
 const loggingInByOAuth2 = ref<boolean>(false);
 const oauth2ClientSessionId = ref<string>(generateRandomUUID());
-
-const oauth2LinkUrl = computed<string>(() => rootStore.generateOAuth2LinkUrl('desktop', oauth2ClientSessionId.value));
 
 const thirdPartyLoginList = computed<DesktopPageLinkedThirdPartyLogin[]>(() => {
     const ret: DesktopPageLinkedThirdPartyLogin[] = [];
@@ -393,7 +388,7 @@ function updatePassword(): void {
     const problemMessage = inputProblemMessage.value;
 
     if (problemMessage) {
-        snackbar.value?.showMessage(problemMessage);
+        desktopPageStore.addToast(problemMessage);
         return;
     }
 
@@ -403,25 +398,33 @@ function updatePassword(): void {
         password: newPassword.value,
         oldPassword: currentPassword.value
     }).then(response => {
-        updatingPassword.value = false;
         currentPassword.value = '';
         newPassword.value = '';
         confirmPassword.value = '';
 
-        if (response.user) {
-            const localeDefaultSettings = setLanguage(response.user.language);
+        const languagePromise = response.user ? setLanguage(response.user.language) : Promise.reject();
+
+        languagePromise.then(localeDefaultSettings => {
             settingsStore.updateLocalizedDefaultSettings(localeDefaultSettings);
-        }
 
-        reloadSessions(true);
+            if (response.user) {
+                desktopPageStore.addToast('Your profile has been successfully updated');
+            }
+        }).catch(() => {
+            if (response.user) {
+                desktopPageStore.addToast('Your profile has been successfully updated, but the language resources could not be loaded.');
+            }
+        }).finally(() => {
+            updatingPassword.value = false;
+            reloadSessions(true);
+        });
 
-        snackbar.value?.showMessage('Your profile has been successfully updated');
     }).catch(error => {
         updatingPassword.value = false;
         currentPassword.value = '';
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -436,9 +439,9 @@ function reloadExternalAuth(silent?: boolean): void {
     userExternalAuthStore.getExternalAuths().then(response => {
         if (!silent) {
             if (isEquals(externalAuths.value, response)) {
-                snackbar.value?.showMessage('Third-party login list is up to date');
+                desktopPageStore.addToast('Third-party login list is up to date');
             } else {
-                snackbar.value?.showMessage('Third-party login list has been updated');
+                desktopPageStore.addToast('Third-party login list has been updated');
             }
         }
 
@@ -451,7 +454,31 @@ function reloadExternalAuth(silent?: boolean): void {
             externalAuths.value = [];
         } else if (!error.processed) {
             externalAuths.value = [];
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
+        }
+    });
+}
+
+function linkExternalAuth(): void {
+    if (!isOAuth2Enabled() || loggingInByOAuth2.value) {
+        return;
+    }
+
+    loggingInByOAuth2.value = true;
+
+    userExternalAuthStore.linkExternalOAuth2({
+        platform: 'desktop',
+        clientSessionId: oauth2ClientSessionId.value
+    }).then(url => {
+        window.location.href = url;
+        oauth2ClientSessionId.value = generateRandomUUID();
+        loggingInByOAuth2.value = false;
+    }).catch(error => {
+        oauth2ClientSessionId.value = generateRandomUUID();
+        loggingInByOAuth2.value = false;
+
+        if (!error.processed) {
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -478,9 +505,9 @@ function reloadSessions(silent?: boolean): void {
     tokensStore.getAllTokens().then(response => {
         if (!silent) {
             if (isEquals(tokens.value, response)) {
-                snackbar.value?.showMessage('Session list is up to date');
+                desktopPageStore.addToast('Session list is up to date');
             } else {
-                snackbar.value?.showMessage('Session list has been updated');
+                desktopPageStore.addToast('Session list has been updated');
             }
         }
 
@@ -490,7 +517,7 @@ function reloadSessions(silent?: boolean): void {
         loadingSession.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -513,7 +540,7 @@ function revokeSession(session: SessionInfo): void {
             loadingSession.value = false;
 
             if (!error.processed) {
-                snackbar.value?.showError(error);
+                desktopPageStore.addErrorToast(error);
             }
         });
     });
@@ -536,12 +563,12 @@ function revokeAllSessions(): void {
                 }
             }
 
-            snackbar.value?.showMessage('You have logged out all other sessions');
+            desktopPageStore.addToast('You have logged out all other sessions');
         }).catch(error => {
             loadingSession.value = false;
 
             if (!error.processed) {
-                snackbar.value?.showError(error);
+                desktopPageStore.addErrorToast(error);
             }
         });
     });

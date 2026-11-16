@@ -12,7 +12,7 @@
                                v-if="displayOrderModified">{{ tt('Save Display Order') }}</v-btn>
                         <v-btn density="compact" color="default" variant="text" class="ms-2"
                                :aria-label="tt('Refresh')" :icon="true" :disabled="loading || updating"
-                               :loading="loading" @click="reload">
+                               :loading="loading" @click="reload(true)">
                             <template #loader>
                                 <v-progress-circular indeterminate size="20"/>
                             </template>
@@ -90,12 +90,10 @@
     <upload-dialog ref="uploadDialog" />
 
     <confirm-dialog ref="confirmDialog" />
-    <snack-bar ref="snackbar" />
 </template>
 
 <script setup lang="ts">
 import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
-import SnackBar from '@/components/desktop/SnackBar.vue';
 import UploadDialog from '@/views/desktop/customicons/dialogs/UploadDialog.vue';
 
 import { ref, computed, useTemplateRef } from 'vue';
@@ -103,6 +101,7 @@ import { ref, computed, useTemplateRef } from 'vue';
 import { useI18n } from '@/locales/helpers.ts';
 
 import { useUserCustomIconsStore } from '@/stores/userCustomIcon.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import type { UserCustomIconInfoResponse } from '@/models/user_custom_icon.ts';
 
@@ -113,15 +112,14 @@ import {
 } from '@mdi/js';
 
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
-type SnackBarType = InstanceType<typeof SnackBar>;
 type UploadDialogType = InstanceType<typeof UploadDialog>;
 
 const { tt } = useI18n();
 
 const customIconsStore = useUserCustomIconsStore();
+const desktopPageStore = useDesktopPageStore();
 
 const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
 const uploadDialog = useTemplateRef<UploadDialogType>('uploadDialog');
 
 const loading = ref<boolean>(true);
@@ -132,35 +130,27 @@ const deletingCustomIconId = ref<string>('');
 
 const allCustomIcons = computed<UserCustomIconInfoResponse[]>(() => customIconsStore.allCustomIcons);
 
-function getCustomIconUrl(customIcon: UserCustomIconInfoResponse): string {
-    return customIconsStore.getUserCustomIconUrlWithToken(customIcon);
+function getCustomIconUrl(customIcon: UserCustomIconInfoResponse): string | undefined {
+    return customIconsStore.getUserCustomIconUrl(customIcon);
 }
 
-function init(): void {
+function reload(force: boolean): void {
     loading.value = true;
 
-    customIconsStore.loadAllCustomIcons({ force: false }).then(() => {
-        loading.value = false;
-    }).catch(error => {
-        loading.value = false;
-
-        if (!error.processed) {
-            snackbar.value?.showError(error);
-        }
-    });
-}
-
-function reload(): void {
-    loading.value = true;
-
-    customIconsStore.loadAllCustomIcons({ force: true }).then(() => {
+    customIconsStore.loadAllCustomIcons({
+        force: force
+    }).then(() => {
         loading.value = false;
         displayOrderModified.value = false;
+
+        if (force) {
+            desktopPageStore.addToast('Custom icon list has been updated');
+        }
     }).catch(error => {
         loading.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -168,11 +158,11 @@ function reload(): void {
 function add(): void {
     uploadDialog.value?.open().then(result => {
         if (result && result.message) {
-            snackbar.value?.showMessage(result.message);
+            desktopPageStore.addToast(result.message);
         }
     }).catch(error => {
         if (error) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -192,7 +182,7 @@ function deleteCustomIcon(customIcon: UserCustomIconInfoResponse): void {
             deletingCustomIconId.value = '';
 
             if (!error.processed) {
-                snackbar.value?.showError(error);
+                desktopPageStore.addErrorToast(error);
             }
         });
     });
@@ -212,7 +202,7 @@ function saveSortResult(): void {
         loading.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -225,7 +215,7 @@ function onMove(event: { moved: { element: { id: string }, oldIndex: number, new
     const moveEvent = event.moved;
 
     if (!moveEvent.element || !moveEvent.element.id) {
-        snackbar.value?.showMessage('Unable to move custom icon');
+        desktopPageStore.addToast('Unable to move custom icon');
         return;
     }
 
@@ -236,11 +226,11 @@ function onMove(event: { moved: { element: { id: string }, oldIndex: number, new
     }).then(() => {
         displayOrderModified.value = true;
     }).catch(error => {
-        snackbar.value?.showError(error);
+        desktopPageStore.addErrorToast(error);
     });
 }
 
-init();
+reload(false);
 </script>
 
 <style>

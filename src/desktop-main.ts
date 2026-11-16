@@ -38,6 +38,7 @@ import { VSelect } from 'vuetify/components/VSelect';
 import { VSkeletonLoader } from 'vuetify/components/VSkeletonLoader';
 import { VSlideGroup, VSlideGroupItem } from 'vuetify/components/VSlideGroup';
 import { VSnackbar } from 'vuetify/components/VSnackbar';
+import { VSnackbarQueue } from 'vuetify/components/VSnackbarQueue';
 import { VSwitch } from 'vuetify/components/VSwitch';
 import { VTabs, VTab } from 'vuetify/components/VTabs';
 import { VTable } from 'vuetify/components/VTable';
@@ -208,6 +209,7 @@ const vuetify = createVuetify({
         VSlideGroup,
         VSlideGroupItem,
         VSnackbar,
+        VSnackbarQueue,
         VSwitch,
         VTabs,
         VTab,
@@ -293,6 +295,10 @@ const vuetify = createVuetify({
             size: 40
         },
         VSnackbar: {
+            timeout: 3000,
+            zIndex: 9000
+        },
+        VSnackbarQueue: {
             timeout: 3000,
             zIndex: 9000
         },
@@ -529,7 +535,16 @@ const vuetify = createVuetify({
 // key is in the original i18n text of vuetify (in vuetify/lib/locale/en.js), value is the text in the ezBookkeeping i18n files
 const vuetifyI18nTextKeyMap: Record<string, string> = {
     'open': 'Open',
-    'close': 'Close'
+    'close': 'Close',
+    'loading': 'Loading...',
+    'noDataText': 'No data',
+    'input.clear': 'Clear',
+    'pagination.ariaLabel.root': 'Pagination Navigation',
+    'pagination.ariaLabel.next': 'Next Page',
+    'pagination.ariaLabel.previous': 'Previous Page',
+    'colorPicker.ariaLabel.eyedropper': 'Select color with eyedropper',
+    'colorPicker.ariaLabel.hueSlider': 'Hue',
+    'colorPicker.ariaLabel.hexInput': 'HEX value'
 }
 
 echarts.use([

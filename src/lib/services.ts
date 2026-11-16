@@ -8,12 +8,12 @@ import type {
 import type {
     VersionInfo
 } from '@/core/version.ts';
-import type {
-    ImportFileTypeSupportedAdditionalOptions
-} from '@/core/file.ts';
 import {
     TransactionType
 } from '@/core/transaction.ts';
+import type {
+    ImportFileTypeSupportedAdditionalOptions
+} from '@/core/import_transaction.ts';
 
 import {
     BASE_API_URL_PATH,
@@ -74,7 +74,9 @@ import type {
     TransactionMoveBetweenAccountsRequest,
     TransactionDeleteRequest,
     TransactionBatchDeleteRequest,
+    TransactionCreateBatchRequest,
     TransactionImportRequest,
+    TransactionImportResponse,
     TransactionListByMaxTimeRequest,
     TransactionListInMonthByPageRequest,
     TransactionAllListRequest,
@@ -164,7 +166,6 @@ import type {
 import type {
     UserLoginRequest,
     UserRegisterRequest,
-    UserVerifyEmailResponse,
     UserResendVerifyEmailRequest,
     UserProfileResponse,
     UserProfileUpdateRequest,
@@ -172,7 +173,8 @@ import type {
 } from '@/models/user.ts';
 import type {
     UserExternalAuthUnlinkRequest,
-    UserExternalAuthInfoResponse
+    UserExternalAuthInfoResponse,
+    OAuth2LinkRequest
 } from '@/models/user_external_auth.ts';
 import type {
     OAuth2CallbackLoginRequest
@@ -187,9 +189,17 @@ import type {
 } from '@/models/large_language_model.ts';
 import type {
     UserCustomIconInfoResponse,
+    UserCustomIconListResponse,
     UserCustomIconMoveRequest,
     UserCustomIconDeleteRequest
 } from '@/models/user_custom_icon.ts';
+import type {
+    ImportPresetInfoResponse,
+    ImportPresetCreateRequest,
+    ImportPresetModifyRequest,
+    ImportPresetMoveRequest,
+    ImportPresetDeleteRequest
+} from '@/models/import_preset.ts';
 
 import {
     getCurrentToken,
@@ -198,7 +208,6 @@ import {
 
 import {
     isDefined,
-    isBoolean,
     objectFieldWithValueToArrayItem
 } from './common.ts';
 import {
@@ -215,7 +224,6 @@ import {
     getBrowserTimezoneName,
     getCurrentUnixTime
 } from './datetime.ts';
-import { generateRandomUUID } from './misc.ts';
 import { getBasePath } from './web.ts';
 import logger from './logger.ts';
 
@@ -230,8 +238,8 @@ interface ApiRequestConfig extends AxiosRequestConfig {
 
 export type ApiResponsePromise<T> = Promise<AxiosResponse<ApiResponse<T>>>;
 
-let needBlockRequest = false;
-const blockedRequests: ((token: string | undefined) => void)[] = [];
+let refreshingTokenPromise: ApiResponsePromise<TokenRefreshResponse> | null = null;
+const blockedRequests: ((token: string | null) => void)[] = [];
 const cancelableRequests: Record<string, boolean> = {};
 
 axios.defaults.baseURL = getBasePath() + BASE_API_URL_PATH;
@@ -253,10 +261,10 @@ axios.interceptors.request.use((config: ApiRequestConfig) => {
 
     config.headers['X-Timezone-Name'] = timezoneName;
 
-    if (needBlockRequest && !config.ignoreBlocked) {
+    if (refreshingTokenPromise && !config.ignoreBlocked) {
         return new Promise(resolve => {
             blockedRequests.push(newToken => {
-                if (newToken) {
+                if (newToken && !config.noAuth) {
                     config.headers.Authorization = `Bearer ${newToken}`;
                 }
 
@@ -279,7 +287,7 @@ axios.interceptors.response.use(response => {
 
     return response;
 }, error => {
-    if ('cancelableUuid' in error.response.config && error.response.config.cancelableUuid && cancelableRequests[error.response.config.cancelableUuid]) {
+    if (error.response && 'cancelableUuid' in error.response.config && error.response.config.cancelableUuid && cancelableRequests[error.response.config.cancelableUuid]) {
         logger.debug('Response canceled by user request, url: ' + error.response.config.url + ', cancelableUuid: ' + error.response.config.cancelableUuid);
         delete cancelableRequests[error.response.config.cancelableUuid];
         return Promise.reject({ canceled: true });
@@ -349,12 +357,13 @@ export default {
     register: (req: UserRegisterRequest): ApiResponsePromise<RegisterResponse> => {
         return axios.post<ApiResponse<RegisterResponse>>('register.json', req);
     },
-    verifyEmail: ({ token, requestNewToken }: { token: string, requestNewToken: boolean }): ApiResponsePromise<UserVerifyEmailResponse> => {
-        return axios.post<ApiResponse<UserVerifyEmailResponse>>('verify_email/by_token.json?token=' + token, {
-            requestNewToken: requestNewToken
-        }, {
+    verifyEmail: (token: string): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('verify_email/by_token.json', {}, {
             noAuth: true,
-            ignoreError: true
+            ignoreError: true,
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
         } as ApiRequestConfig);
     },
     resendVerifyEmailByUnloginUser: (req: UserResendVerifyEmailRequest): ApiResponsePromise<boolean> => {
@@ -364,41 +373,60 @@ export default {
         return axios.post<ApiResponse<boolean>>('forget_password/request.json', req);
     },
     resetPassword: ({ email, token, password }: { email: string, token: string, password: string }): ApiResponsePromise<boolean> => {
-        return axios.post<ApiResponse<boolean>>('forget_password/reset/by_token.json?token=' + token, {
+        return axios.post<ApiResponse<boolean>>('forget_password/reset/by_token.json', {
             email: email,
             password: password
         }, {
             noAuth: true,
-            ignoreError: true
+            ignoreError: true,
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
         } as ApiRequestConfig);
     },
     logout: (): ApiResponsePromise<boolean> => {
         return axios.get<ApiResponse<boolean>>('logout.json');
     },
     refreshToken: (): ApiResponsePromise<TokenRefreshResponse> => {
-        return new Promise((resolve) => {
-            needBlockRequest = true;
+        if (refreshingTokenPromise) {
+            return refreshingTokenPromise;
+        }
 
+        let newToken: string | null;
+
+        refreshingTokenPromise = new Promise((resolve, reject) => {
             axios.post<ApiResponse<TokenRefreshResponse>>('v1/tokens/refresh.json', {}, {
                 ignoreBlocked: true
             } as ApiRequestConfig).then(response => {
                 const data = response.data;
 
-                resolve(response);
-                needBlockRequest = false;
+                if (data && data.success && data.result && data.result.newToken) {
+                    newToken = data.result.newToken;
+                } else {
+                    newToken = getCurrentToken();
+                }
 
-                return data.result.newToken;
-            }).then(newToken => {
-                blockedRequests.forEach(func => func(newToken));
-                blockedRequests.length = 0;
+                resolve(response);
+            }).catch(error => {
+                return reject(error);
+            }).finally(() => {
+                refreshingTokenPromise = null;
+
+                const requests = blockedRequests.splice(0);
+                requests.forEach(func => func(newToken));
             });
         });
+
+        return refreshingTokenPromise;
     },
     getExternalAuths: (): ApiResponsePromise<UserExternalAuthInfoResponse[]> => {
         return axios.get<ApiResponse<UserExternalAuthInfoResponse[]>>('v1/users/external_auth/list.json');
     },
     unlinkExternalAuth: (req: UserExternalAuthUnlinkRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/users/external_auth/unlink.json', req);
+    },
+    linkExternalOAuth2: (req: OAuth2LinkRequest): ApiResponsePromise<string> => {
+        return axios.post<ApiResponse<string>>('v1/users/external_auth/oauth2/link.json', req);
     },
     getTokens: (): ApiResponsePromise<TokenInfoResponse[]> => {
         return axios.get<ApiResponse<TokenInfoResponse[]>>('v1/tokens/list.json');
@@ -669,6 +697,9 @@ export default {
     modifyTransaction: (req: TransactionModifyRequest): ApiResponsePromise<TransactionInfoResponse> => {
         return axios.post<ApiResponse<TransactionInfoResponse>>('v1/transactions/modify.json', req);
     },
+    addTransactionBatch: (req: TransactionCreateBatchRequest): ApiResponsePromise<TransactionInfoResponse[]> => {
+        return axios.post<ApiResponse<TransactionInfoResponse[]>>('v1/transactions/add_batch.json', req);
+    },
     batchUpdateTransactionCategories: (req: TransactionBatchUpdateCategoryRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transactions/batch_update/category.json', req, {
             timeout: DEFAULT_BATCH_UPDATE_TRANSACTIONS_API_TIMEOUT
@@ -763,13 +794,13 @@ export default {
             cancelableUuid: cancelableUuid
         } as ApiRequestConfig);
     },
-    importTransactions: (req: TransactionImportRequest): ApiResponsePromise<number> => {
-        return axios.post<ApiResponse<number>>('v1/transactions/import.json', req, {
+    importTransactions: (req: TransactionImportRequest): ApiResponsePromise<TransactionImportResponse> => {
+        return axios.post<ApiResponse<TransactionImportResponse>>('v1/transactions/import.json', req, {
             timeout: DEFAULT_IMPORT_API_TIMEOUT
         } as ApiRequestConfig);
     },
-    getImportTransactionsProcess: (clientSessionId: string): ApiResponsePromise<number | null> => {
-        return axios.get<ApiResponse<number | null>>('v1/transactions/import/process.json?client_session_id=' + clientSessionId, {
+    getImportTransactionsProcess: (clientSessionId: string): ApiResponsePromise<TransactionImportResponse | null> => {
+        return axios.get<ApiResponse<TransactionImportResponse | null>>('v1/transactions/import/process.json?client_session_id=' + clientSessionId, {
             ignoreError: true
         } as ApiRequestConfig);
     },
@@ -913,8 +944,8 @@ export default {
             cancelableUuid: cancelableUuid
         } as ApiRequestConfig);
     },
-    getAllUserCustomIcons: (): ApiResponsePromise<UserCustomIconInfoResponse[]> => {
-        return axios.get<ApiResponse<UserCustomIconInfoResponse[]>>('v1/custom_icons/list.json');
+    getAllUserCustomIcons: (): ApiResponsePromise<UserCustomIconListResponse> => {
+        return axios.get<ApiResponse<UserCustomIconListResponse>>('v1/custom_icons/list.json');
     },
     uploadUserCustomIcon: ({ iconFile, clientSessionId }: { iconFile: File, clientSessionId?: string }): ApiResponsePromise<UserCustomIconInfoResponse> => {
         return axios.postForm<ApiResponse<UserCustomIconInfoResponse>>('v1/custom_icons/upload.json', {
@@ -929,6 +960,24 @@ export default {
     },
     deleteUserCustomIcon: (req: UserCustomIconDeleteRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/custom_icons/delete.json', req);
+    },
+    getImportPresets: (): ApiResponsePromise<ImportPresetInfoResponse[]> => {
+        return axios.get<ApiResponse<ImportPresetInfoResponse[]>>('v1/import_presets/list.json');
+    },
+    getImportPreset: ({ id }: { id: string }): ApiResponsePromise<ImportPresetInfoResponse> => {
+        return axios.get<ApiResponse<ImportPresetInfoResponse>>('v1/import_presets/get.json?id=' + id);
+    },
+    addImportPreset: (req: ImportPresetCreateRequest): ApiResponsePromise<ImportPresetInfoResponse> => {
+        return axios.post<ApiResponse<ImportPresetInfoResponse>>('v1/import_presets/add.json', req);
+    },
+    modifyImportPreset: (req: ImportPresetModifyRequest): ApiResponsePromise<ImportPresetInfoResponse> => {
+        return axios.post<ApiResponse<ImportPresetInfoResponse>>('v1/import_presets/modify.json', req);
+    },
+    moveImportPreset: (req: ImportPresetMoveRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/import_presets/move.json', req);
+    },
+    deleteImportPreset: (req: ImportPresetDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/import_presets/delete.json', req);
     },
     getLatestExchangeRates: (param: { ignoreError?: boolean }): ApiResponsePromise<LatestExchangeRateResponse> => {
         return axios.get<ApiResponse<LatestExchangeRateResponse>>('v1/exchange_rates/latest.json', {
@@ -951,9 +1000,6 @@ export default {
     generateOAuth2LoginUrl: (platform: 'mobile' | 'desktop', clientSessionId: string): string => {
         return `${getBasePath()}/oauth2/login?platform=${platform}&client_session_id=${clientSessionId}`;
     },
-    generateOAuth2LinkUrl: (platform: 'mobile' | 'desktop', clientSessionId: string): string => {
-        return `${getBasePath()}/oauth2/login?platform=${platform}&client_session_id=${clientSessionId}&token=${getCurrentToken()}`;
-    },
     generateQrCodeUrl: (qrCodeName: string): string => {
         return `${getBasePath()}${BASE_QRCODE_PATH}/${qrCodeName}.png`;
     },
@@ -963,8 +1009,7 @@ export default {
             `.*${BASE_PROXY_URL_PATH}/map/annotation/[^/]+/[^/]+/[^/]+\\.png\\?provider=[^&]+.*$`
         ];
     },
-    generateMapProxyTileImageUrl: (mapProvider: string, language: string): string => {
-        const token = getCurrentToken();
+    generateMapProxyTileImageUrl: (mapProvider: string, language: string, token: string): string => {
         let url = `${getBasePath()}${BASE_PROXY_URL_PATH}/map/tile/{z}/{x}/{y}.png?provider=${mapProvider}&token=${token}`;
 
         if (language) {
@@ -973,8 +1018,7 @@ export default {
 
         return url;
     },
-    generateMapProxyAnnotationImageUrl: (mapProvider: string, language: string): string => {
-        const token = getCurrentToken();
+    generateMapProxyAnnotationImageUrl: (mapProvider: string, language: string, token: string): string => {
         let url = `${getBasePath()}${BASE_PROXY_URL_PATH}/map/annotation/{z}/{x}/{y}.png?provider=${mapProvider}&token=${token}`;
 
         if (language) {
@@ -1000,52 +1044,5 @@ export default {
     },
     generateAmapApiInternalProxyUrl: (): string => {
         return `${window.location.origin}${getBasePath()}${BASE_AMAP_API_PROXY_URL_PATH}`;
-    },
-    getInternalAvatarUrlWithToken(avatarUrl: string, disableBrowserCache?: boolean | string): string {
-        if (!avatarUrl) {
-            return avatarUrl;
-        }
-
-        const params: string[] = [];
-        params.push('token=' + getCurrentToken());
-
-        if (disableBrowserCache) {
-            if (isBoolean(disableBrowserCache)) {
-                params.push('_nocache=' + generateRandomUUID());
-            } else {
-                params.push('_nocache=' + disableBrowserCache);
-            }
-        }
-
-        if (avatarUrl.indexOf('?') >= 0) {
-            return avatarUrl + '&' + params.join('&');
-        } else {
-            return avatarUrl + '?' + params.join('&');
-        }
-    },
-    getUserCustomIconUrlWithToken(iconId: string | number): string {
-        return `${getBasePath()}/icons/${iconId}.png?token=${getCurrentToken()}`;
-    },
-    getTransactionPictureUrlWithToken(pictureUrl: string, disableBrowserCache?: boolean | string): string {
-        if (!pictureUrl) {
-            return pictureUrl;
-        }
-
-        const params: string[] = [];
-        params.push('token=' + getCurrentToken());
-
-        if (disableBrowserCache) {
-            if (isBoolean(disableBrowserCache)) {
-                params.push('_nocache=' + generateRandomUUID());
-            } else {
-                params.push('_nocache=' + disableBrowserCache);
-            }
-        }
-
-        if (pictureUrl.indexOf('?') >= 0) {
-            return pictureUrl + '&' + params.join('&');
-        } else {
-            return pictureUrl + '?' + params.join('&');
-        }
     }
 };

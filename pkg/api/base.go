@@ -2,7 +2,9 @@ package api
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/mayswind/ezbookkeeping/pkg/avatars"
@@ -11,10 +13,12 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/log"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
+	"github.com/mayswind/ezbookkeeping/pkg/services"
 	"github.com/mayswind/ezbookkeeping/pkg/settings"
 	"github.com/mayswind/ezbookkeeping/pkg/utils"
 )
 
+const internalUserCustomIconUrlFormat = "%sicons/%d.%s"
 const internalTransactionPictureUrlFormat = "%spictures/%d.%s"
 
 // ApiUsingConfig represents an api that need to use config
@@ -27,18 +31,24 @@ func (a *ApiUsingConfig) CurrentConfig() *settings.Config {
 	return a.container.GetCurrentConfig()
 }
 
+// GetUserCustomIconInfoResponse returns the view-object of a user custom icon according to the icon model
+func (a *ApiUsingConfig) GetUserCustomIconInfoResponse(iconInfo *models.UserCustomIcon, iconToken string) *models.UserCustomIconInfoResponse {
+	originalUrl := fmt.Sprintf(internalUserCustomIconUrlFormat, a.CurrentConfig().RootUrl, iconInfo.IconId, models.UserCustomIconFileExtension)
+	return iconInfo.ToUserCustomIconInfoResponse(originalUrl, iconToken)
+}
+
 // GetTransactionPictureInfoResponse returns the view-object of transaction picture basic info according to the transaction picture model
-func (a *ApiUsingConfig) GetTransactionPictureInfoResponse(pictureInfo *models.TransactionPictureInfo) *models.TransactionPictureInfoBasicResponse {
+func (a *ApiUsingConfig) GetTransactionPictureInfoResponse(pictureInfo *models.TransactionPictureInfo, pictureToken string) *models.TransactionPictureInfoBasicResponse {
 	originalUrl := fmt.Sprintf(internalTransactionPictureUrlFormat, a.CurrentConfig().RootUrl, pictureInfo.PictureId, pictureInfo.PictureExtension)
-	return pictureInfo.ToTransactionPictureInfoBasicResponse(originalUrl)
+	return pictureInfo.ToTransactionPictureInfoBasicResponse(originalUrl, pictureToken)
 }
 
 // GetTransactionPictureInfoResponseList returns the view-object list of transaction picture basic info according to the transaction picture model
-func (a *ApiUsingConfig) GetTransactionPictureInfoResponseList(pictureInfos []*models.TransactionPictureInfo) models.TransactionPictureInfoBasicResponseSlice {
+func (a *ApiUsingConfig) GetTransactionPictureInfoResponseList(pictureInfos []*models.TransactionPictureInfo, pictureToken string) models.TransactionPictureInfoBasicResponseSlice {
 	pictureInfoResps := make(models.TransactionPictureInfoBasicResponseSlice, len(pictureInfos))
 
 	for i := 0; i < len(pictureInfos); i++ {
-		pictureInfoResps[i] = a.GetTransactionPictureInfoResponse(pictureInfos[i])
+		pictureInfoResps[i] = a.GetTransactionPictureInfoResponse(pictureInfos[i], pictureToken)
 	}
 
 	sort.Sort(pictureInfoResps)
@@ -106,40 +116,40 @@ func (a *ApiUsingConfig) GetAfterOpenNotificationContent(userLanguage string, cl
 // ApiUsingDuplicateChecker represents an api that need to use duplicate checker
 type ApiUsingDuplicateChecker struct {
 	ApiUsingConfig
-	container *duplicatechecker.DuplicateCheckerContainer
+	duplicateChecker duplicatechecker.DuplicateChecker
 }
 
 // GetSubmissionRemark returns whether the same submission has been processed and related remark by the current duplicate checker
 func (a *ApiUsingDuplicateChecker) GetSubmissionRemark(checkerType duplicatechecker.DuplicateCheckerType, uid int64, identification string) (bool, string) {
-	return a.container.GetSubmissionRemark(checkerType, uid, identification)
+	return a.duplicateChecker.GetSubmissionRemark(checkerType, uid, identification)
 }
 
 // SetSubmissionRemarkWithCustomExpiration saves the identification and remark by the current duplicate checker with custom expiration time
 func (a *ApiUsingDuplicateChecker) SetSubmissionRemarkWithCustomExpiration(checkerType duplicatechecker.DuplicateCheckerType, uid int64, identification string, remark string, expiration time.Duration) {
-	a.container.SetSubmissionRemarkWithCustomExpiration(checkerType, uid, identification, remark, expiration)
+	a.duplicateChecker.SetSubmissionRemarkWithCustomExpiration(checkerType, uid, identification, remark, expiration)
 }
 
 // GetOrSetSubmissionRemarkWithCustomExpiration returns the remark when the same submission has been processed or saves the identification and remark by the current duplicate checker with custom expiration time
 func (a *ApiUsingDuplicateChecker) GetOrSetSubmissionRemarkWithCustomExpiration(checkerType duplicatechecker.DuplicateCheckerType, uid int64, identification string, remark string, expiration time.Duration) (bool, string) {
-	return a.container.GetOrSetSubmissionRemarkWithCustomExpiration(checkerType, uid, identification, remark, expiration)
+	return a.duplicateChecker.GetOrSetSubmissionRemarkWithCustomExpiration(checkerType, uid, identification, remark, expiration)
 }
 
 // SetSubmissionRemarkIfEnable saves the identification and remark by the current duplicate checker if the duplicate submission check is enabled
 func (a *ApiUsingDuplicateChecker) SetSubmissionRemarkIfEnable(checkerType duplicatechecker.DuplicateCheckerType, uid int64, identification string, remark string) {
 	if a.CurrentConfig().EnableDuplicateSubmissionsCheck {
-		a.container.SetSubmissionRemark(checkerType, uid, identification, remark)
+		a.duplicateChecker.SetSubmissionRemark(checkerType, uid, identification, remark)
 	}
 }
 
 // RemoveSubmissionRemark removes the identification and remark by the current duplicate checker
 func (a *ApiUsingDuplicateChecker) RemoveSubmissionRemark(checkerType duplicatechecker.DuplicateCheckerType, uid int64, identification string) {
-	a.container.RemoveSubmissionRemark(checkerType, uid, identification)
+	a.duplicateChecker.RemoveSubmissionRemark(checkerType, uid, identification)
 }
 
 // RemoveSubmissionRemarkIfEnable removes the identification and remark by the current duplicate checker if the duplicate submission check is enabled
 func (a *ApiUsingDuplicateChecker) RemoveSubmissionRemarkIfEnable(checkerType duplicatechecker.DuplicateCheckerType, uid int64, identification string) {
 	if a.CurrentConfig().EnableDuplicateSubmissionsCheck {
-		a.container.RemoveSubmissionRemark(checkerType, uid, identification)
+		a.duplicateChecker.RemoveSubmissionRemark(checkerType, uid, identification)
 	}
 }
 
@@ -147,7 +157,7 @@ func (a *ApiUsingDuplicateChecker) RemoveSubmissionRemarkIfEnable(checkerType du
 func (a *ApiUsingDuplicateChecker) CheckFailureCount(c *core.WebContext, uid int64) error {
 	if a.CurrentConfig().MaxFailuresPerIpPerMinute > 0 {
 		clientIp := c.ClientIP()
-		ipFailureCount := a.container.GetFailureCount(clientIp)
+		ipFailureCount := a.duplicateChecker.GetFailureCount(clientIp)
 
 		if ipFailureCount >= a.CurrentConfig().MaxFailuresPerIpPerMinute {
 			log.Warnf(c, "[base.CheckFailureCount] operation failure via IP \"%s\", current failure count: %d reached the limit", clientIp, ipFailureCount)
@@ -156,7 +166,7 @@ func (a *ApiUsingDuplicateChecker) CheckFailureCount(c *core.WebContext, uid int
 	}
 
 	if a.CurrentConfig().MaxFailuresPerUserPerMinute > 0 && uid > 0 {
-		uidFailureCount := a.container.GetFailureCount(utils.Int64ToString(uid))
+		uidFailureCount := a.duplicateChecker.GetFailureCount(utils.Int64ToString(uid))
 
 		if uidFailureCount >= a.CurrentConfig().MaxFailuresPerUserPerMinute {
 			log.Warnf(c, "[base.CheckFailureCount] operation failure via uid \"%d\", current failure count: %d reached the limit", uid, uidFailureCount)
@@ -174,21 +184,21 @@ func (a *ApiUsingDuplicateChecker) CheckAndIncreaseFailureCount(c *core.WebConte
 	uidFailureCount := uint32(0)
 
 	if a.CurrentConfig().MaxFailuresPerIpPerMinute > 0 {
-		ipFailureCount = a.container.GetFailureCount(clientIp)
+		ipFailureCount = a.duplicateChecker.GetFailureCount(clientIp)
 	}
 
 	if a.CurrentConfig().MaxFailuresPerUserPerMinute > 0 && uid > 0 {
-		uidFailureCount = a.container.GetFailureCount(utils.Int64ToString(uid))
+		uidFailureCount = a.duplicateChecker.GetFailureCount(utils.Int64ToString(uid))
 	}
 
 	if a.CurrentConfig().MaxFailuresPerIpPerMinute > 0 && ipFailureCount < a.CurrentConfig().MaxFailuresPerIpPerMinute {
 		log.Warnf(c, "[base.CheckAndIncreaseFailureCount] operation failure via IP \"%s\", previous failure count: %d", clientIp, ipFailureCount)
-		a.container.IncreaseFailureCount(clientIp)
+		a.duplicateChecker.IncreaseFailureCount(clientIp)
 	}
 
 	if a.CurrentConfig().MaxFailuresPerUserPerMinute > 0 && uid > 0 && uidFailureCount < a.CurrentConfig().MaxFailuresPerUserPerMinute {
 		log.Warnf(c, "[base.CheckAndIncreaseFailureCount] operation failure via uid \"%d\", previous failure count: %d", uid, uidFailureCount)
-		a.container.IncreaseFailureCount(utils.Int64ToString(uid))
+		a.duplicateChecker.IncreaseFailureCount(utils.Int64ToString(uid))
 	}
 
 	if a.CurrentConfig().MaxFailuresPerIpPerMinute > 0 && ipFailureCount >= a.CurrentConfig().MaxFailuresPerIpPerMinute {
@@ -206,12 +216,41 @@ func (a *ApiUsingDuplicateChecker) CheckAndIncreaseFailureCount(c *core.WebConte
 
 // ApiUsingAvatarProvider represents an api that need to use avatar provider
 type ApiUsingAvatarProvider struct {
-	container *avatars.AvatarProviderContainer
+	avatarProvider avatars.AvatarProvider
+	tokens         *services.TokenService
 }
 
 // GetAvatarUrl returns the avatar url by the current user avatar provider
-func (a *ApiUsingAvatarProvider) GetAvatarUrl(user *models.User) string {
-	return a.container.GetAvatarUrl(user)
+func (a *ApiUsingAvatarProvider) GetAvatarUrl(c *core.WebContext, user *models.User) (string, error) {
+	avatarUrl := a.avatarProvider.GetAvatarUrl(user)
+
+	if avatarUrl == "" || !a.avatarProvider.NeedAvatarToken() {
+		return avatarUrl, nil
+	}
+
+	claims := c.GetTokenClaims()
+
+	if claims == nil || claims.Type != core.USER_TOKEN_TYPE_NORMAL {
+		return avatarUrl, nil
+	}
+
+	avatarToken, err := a.tokens.DeriveUserAvatarToken(c, claims, c.GetTokenRecord())
+
+	if err != nil {
+		return "", err
+	}
+
+	if avatarToken != "" {
+		separator := "?"
+
+		if strings.Contains(avatarUrl, "?") {
+			separator = "&"
+		}
+
+		avatarUrl += separator + "token=" + url.QueryEscape(avatarToken)
+	}
+
+	return avatarUrl, nil
 }
 
 // ApiWithUserInfo represents an api that can returns user info
@@ -221,6 +260,12 @@ type ApiWithUserInfo struct {
 }
 
 // GetUserBasicInfo returns the view-object of user basic info according to the user model
-func (a *ApiWithUserInfo) GetUserBasicInfo(user *models.User) *models.UserBasicInfo {
-	return user.ToUserBasicInfo(a.CurrentConfig().AvatarProvider, a.GetAvatarUrl(user))
+func (a *ApiWithUserInfo) GetUserBasicInfo(c *core.WebContext, user *models.User) (*models.UserBasicInfo, error) {
+	avatarUrl, err := a.GetAvatarUrl(c, user)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return user.ToUserBasicInfo(a.CurrentConfig().AvatarProvider, avatarUrl), nil
 }

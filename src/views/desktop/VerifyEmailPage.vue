@@ -8,7 +8,7 @@
         </router-link>
         <v-row no-gutters class="auth-wrapper">
             <v-col cols="12" md="8" class="auth-image-background d-none d-md-flex align-center justify-center position-relative">
-                <auth-illustration variant="signup" />
+                <auth-illustration variant="verify" :verified="verified" />
             </v-col>
             <v-col cols="12" md="4" class="auth-card d-flex flex-column">
                 <div class="d-flex align-center justify-center h-100">
@@ -47,9 +47,9 @@
                                     <v-col cols="12">
                                         <router-link class="d-flex align-center justify-center mt-2"
                                                      :class="{ 'disabled': loading || resending }"
-                                                     :to="verified ? '/' : '/login'">
+                                                     :to="verified && isUserLogined() ? '/' : '/login'">
                                             <v-icon class="icon-with-direction" :icon="mdiChevronLeft"/>
-                                            <span class="text-body-medium" v-if="!verified">{{ tt('Back to login page') }}</span>
+                                            <span class="text-body-medium" v-if="!verified || !isUserLogined()">{{ tt('Back to login page') }}</span>
                                             <span class="text-body-medium" v-else-if="verified">{{ tt('Back to home page') }}</span>
                                         </router-link>
                                     </v-col>
@@ -63,7 +63,7 @@
                     <v-card variant="flat" class="w-100 px-4 pb-3" max-width="500">
                         <v-card-text class="pt-0">
                             <div class="text-center">
-                                <language-select-button :disabled="resending" />
+                                <language-select-button :disabled="resending" @error="desktopPageStore.addErrorToast" />
                             </div>
 
                             <v-divider class="mt-2 mb-3" />
@@ -78,13 +78,11 @@
             </v-col>
         </v-row>
 
-        <confirm-dialog ref="confirmDialog"/>
         <snack-bar ref="snackbar" @update:show="onSnackbarShowStateChanged" />
     </div>
 </template>
 
 <script setup lang="ts">
-import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
 import { ref, useTemplateRef } from 'vue';
@@ -93,6 +91,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from '@/locales/helpers.ts';
 
 import { useRootStore } from '@/stores/index.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import { APPLICATION_LOGO_PATH } from '@/consts/asset.ts';
 
@@ -104,7 +103,6 @@ import {
     mdiChevronLeft
 } from '@mdi/js';
 
-type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
 type SnackBarType = InstanceType<typeof SnackBar>;
 
 const props = defineProps<{
@@ -118,10 +116,10 @@ const router = useRouter();
 const { tt, te } = useI18n();
 
 const rootStore = useRootStore();
+const desktopPageStore = useDesktopPageStore();
 
 const version = `${getClientDisplayVersion()}`;
 
-const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
 const snackbar = useTemplateRef<SnackBarType>('snackbar');
 
 const password = ref<string>('');
@@ -139,10 +137,7 @@ function init(): void {
         return;
     }
 
-    rootStore.verifyEmail({
-        token: props.token,
-        requestNewToken: !isUserLogined()
-    }).then(() => {
+    rootStore.verifyEmail(props.token).then(() => {
         loading.value = false;
         verified.value = true;
         snackbar.value?.showMessage('Email address is verified');
@@ -152,7 +147,7 @@ function init(): void {
 
         if (!error.processed) {
             errorMessage.value = te(error.message || error);
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -165,12 +160,12 @@ function resendEmail(): void {
         password: password.value
     }).then(() => {
         resending.value = false;
-        snackbar.value?.showMessage('Validation email has been sent');
+        desktopPageStore.addToast('Validation email has been sent');
     }).catch(error => {
         resending.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }

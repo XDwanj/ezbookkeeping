@@ -61,7 +61,7 @@
                                 type="text"
                                 autocomplete="nickname"
                                 persistent-placeholder
-                                max-width="400px"
+                                max-width="320px"
                                 :disabled="loading || saving"
                                 :placeholder="tt('Your nickname')"
                                 v-model="newProfile.nickname"
@@ -77,7 +77,7 @@
                                 type="email"
                                 autocomplete="email"
                                 persistent-placeholder
-                                max-width="400px"
+                                max-width="320px"
                                 :disabled="loading || saving"
                                 :placeholder="tt('Your email address')"
                                 v-model="newProfile.email"
@@ -96,6 +96,7 @@
                                                secondary-key-field="id" secondary-value-field="id"
                                                secondary-title-field="name"
                                                secondary-icon-field="icon" secondary-icon-type-field="iconType" secondary-icon-type="account" secondary-color-field="color"
+                                               :menu-props="{ contentClass: 'two-column-select-menu select-menu-x-large' }"
                                                :disabled="loading || saving || !allVisibleAccounts.length"
                                                :enable-filter="true" :filter-placeholder="tt('Find account')" :filter-no-items-text="tt('No available account')"
                                                :placeholder="tt('Default Account')"
@@ -155,6 +156,7 @@
                             <span>{{ languageTitle }}</span>
                             <v-spacer/>
                             <language-select class="ms-4" density="compact" max-width="400px"
+                                             :menu-props="{ contentClass: 'select-menu-large' }"
                                              :disabled="loading || saving"
                                              :placeholder="languageTitle"
                                              :include-system-default="true"
@@ -165,6 +167,7 @@
                             <span>{{ tt('Default Currency') }}</span>
                             <v-spacer/>
                             <currency-select class="ms-4" density="compact" max-width="400px"
+                                             :menu-props="{ contentClass: 'select-menu-large' }"
                                              :disabled="loading || saving"
                                              :placeholder="tt('Default Currency')"
                                              v-model="newProfile.defaultCurrency" />
@@ -492,13 +495,11 @@
     </v-row>
 
     <confirm-dialog ref="confirmDialog"/>
-    <snack-bar ref="snackbar" />
     <input ref="avatarInput" type="file" style="display: none" :accept="SUPPORTED_IMAGE_EXTENSIONS" @change="updateAvatar($event)" />
 </template>
 
 <script setup lang="ts">
 import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
-import SnackBar from '@/components/desktop/SnackBar.vue';
 
 import { ref, computed, useTemplateRef } from 'vue';
 
@@ -508,13 +509,13 @@ import { useUserProfilePageBase } from '@/views/base/users/UserProfilePageBase.t
 import { useRootStore } from '@/stores/index.ts';
 import { useUserStore } from '@/stores/user.ts';
 import { useAccountsStore } from '@/stores/account.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import { TransactionEditScopeType } from '@/core/transaction.ts';
 import { SUPPORTED_IMAGE_EXTENSIONS } from '@/consts/file.ts';
 import type { UserProfileResponse } from '@/models/user.ts';
 import { Account } from '@/models/account.ts';
 
-import { generateRandomUUID } from '@/lib/misc.ts';
 import { isUserVerifyEmailEnabled } from '@/lib/server_settings.ts';
 
 import {
@@ -523,7 +524,6 @@ import {
 } from '@mdi/js';
 
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
-type SnackBarType = InstanceType<typeof SnackBar>;
 
 const { tt } = useI18n();
 
@@ -571,16 +571,15 @@ const {
 const rootStore = useRootStore();
 const userStore = useUserStore();
 const accountsStore = useAccountsStore();
+const desktopPageStore = useDesktopPageStore();
 
 const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
 const avatarInput = useTemplateRef<HTMLInputElement>('avatarInput');
 
 const avatarUrl = ref<string>('');
 const avatarProvider = ref<string | undefined>('');
-const avatarNoCacheId = ref<string>('');
 
-const currentUserAvatar = computed<string | null>(() => userStore.getUserAvatarUrl(avatarUrl.value, avatarNoCacheId.value));
+const currentUserAvatar = computed<string | null>(() => userStore.getUserAvatarUrl(avatarUrl.value));
 
 function init(): void {
     loading.value = true;
@@ -604,7 +603,7 @@ function init(): void {
         loading.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -613,22 +612,25 @@ function save(): void {
     const problemMessage = inputIsNotChangedProblemMessage.value || inputInvalidProblemMessage.value || extendInputInvalidProblemMessage.value || langAndRegionInputInvalidProblemMessage.value;
 
     if (problemMessage) {
-        snackbar.value?.showMessage(problemMessage);
+        desktopPageStore.addToast(problemMessage);
         return;
     }
 
     saving.value = true;
 
     rootStore.updateUserProfile(newProfile.value.toProfileUpdateRequest()).then(response => {
-        saving.value = false;
-
-        doAfterProfileUpdate(response.user);
-        snackbar.value?.showMessage('Your profile has been successfully updated');
+        doAfterProfileUpdate(response.user).then(() => {
+            desktopPageStore.addToast('Your profile has been successfully updated');
+        }).catch(() => {
+            desktopPageStore.addToast('Your profile has been successfully updated, but the language resources could not be loaded.');
+        }).finally(() => {
+            saving.value = false;
+        });
     }).catch(error => {
         saving.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -656,16 +658,15 @@ function updateAvatar(event: Event): void {
         if (response) {
             avatarUrl.value = response.avatar;
             avatarProvider.value = response.avatarProvider;
-            avatarNoCacheId.value = generateRandomUUID();
             setCurrentUserProfile(response);
         }
 
-        snackbar.value?.showMessage('Your avatar has been successfully updated');
+        desktopPageStore.addToast('Your avatar has been successfully updated');
     }).catch(error => {
         saving.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -683,12 +684,12 @@ function removeAvatar(): void {
                 setCurrentUserProfile(response);
             }
 
-            snackbar.value?.showMessage('Your profile has been successfully updated');
+            desktopPageStore.addToast('Your avatar has been successfully updated');
         }).catch(error => {
             saving.value = false;
 
             if (!error.processed) {
-                snackbar.value?.showError(error);
+                desktopPageStore.addErrorToast(error);
             }
         });
     });
@@ -699,12 +700,12 @@ function resendVerifyEmail(): void {
 
     rootStore.resendVerifyEmailByLoginedUser().then(() => {
         resending.value = false;
-        snackbar.value?.showMessage('Validation email has been sent');
+        desktopPageStore.addToast('Validation email has been sent');
     }).catch(error => {
         resending.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }

@@ -140,13 +140,25 @@
                                 <div class="transaction-keyword-filter ms-2">
                                     <v-text-field autocomplete="off" density="compact" :disabled="loading"
                                                   :prepend-inner-icon="mdiMagnify"
-                                                  :append-inner-icon="filterKeyword !== query.keyword ? mdiCheck : undefined"
                                                   :placeholder="tt('Filter transaction description')"
                                                   v-model="filterKeyword"
                                                   v-if="canUseKeywordFilter"
-                                                  @click:append-inner="setKeywordFilter(filterKeyword)"
                                                   @keyup.enter="setKeywordFilter(filterKeyword)"
-                                    />
+                                    >
+                                        <template #append-inner>
+                                            <v-tooltip :text="tt('Filter')" v-if="filterKeyword !== query.keyword">
+                                                <template v-slot:activator="{ props }">
+                                                    <v-icon :icon="mdiCheck"
+                                                            :aria-label="tt('Filter')"
+                                                            :disabled="loading"
+                                                            @click="setKeywordFilter(filterKeyword)"
+                                                            @keydown.enter.stop.prevent="setKeywordFilter(filterKeyword)"
+                                                            @keydown.space.stop.prevent="setKeywordFilter(filterKeyword)"
+                                                            v-bind="props" />
+                                                </template>
+                                            </v-tooltip>
+                                        </template>
+                                    </v-text-field>
                                 </div>
                                 <v-btn density="comfortable" color="default" variant="text" class="ms-2"
                                        :aria-label="tt('More')" :disabled="loading" :icon="true">
@@ -460,7 +472,6 @@
                                     v-model:show="showFilterAccountDialog"
                                     @settings:change="setAccountFilter" />
 
-
     <category-filter-settings-dialog type="statisticsCurrent"
                                      v-model:show="showFilterCategoryDialog"
                                      @settings:change="setCategoryFilter" />
@@ -470,12 +481,9 @@
                                             @settings:change="setTagFilter" />
 
     <data-export-dialog ref="dataExportDialog" />
-
-    <snack-bar ref="snackbar" />
 </template>
 
 <script setup lang="ts">
-import SnackBar from '@/components/desktop/SnackBar.vue';
 import TrendsChart from '@/components/desktop/TrendsChart.vue';
 import DataExportDialog from '@/components/desktop/DataExportDialog.vue';
 import AccountFilterSettingsDialog from '@/views/desktop/common/dialogs/AccountFilterSettingsDialog.vue';
@@ -492,6 +500,7 @@ import { useStatisticsTransactionPageBase } from '@/views/base/statistics/Statis
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { type TransactionStatisticsPartialFilter, useStatisticsStore } from '@/stores/statistics.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import type { TypeAndDisplayName } from '@/core/base.ts';
 import { type TextualYearMonth, type TimeRangeAndDateType, DateRangeScene, DateRange } from '@/core/datetime.ts';
@@ -543,7 +552,6 @@ import {
     mdiDotsVertical
 } from '@mdi/js';
 
-type SnackBarType = InstanceType<typeof SnackBar>;
 type TrendsChartType = InstanceType<typeof TrendsChart>;
 type DataExportDialogType = InstanceType<typeof DataExportDialog>;
 
@@ -623,8 +631,8 @@ const {
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const statisticsStore = useStatisticsStore();
+const desktopPageStore = useDesktopPageStore();
 
-const snackbar = useTemplateRef<SnackBarType>('snackbar');
 const monthlyTrendsChart = useTemplateRef<TrendsChartType>('monthlyTrendsChart');
 const dailyTrendsChart = useTemplateRef<TrendsChartType>('dailyTrendsChart');
 const dataExportDialog = useTemplateRef<DataExportDialogType>('dataExportDialog');
@@ -852,7 +860,7 @@ function init(initProps: TransactionStatisticsProps): void {
         initing.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }
@@ -911,13 +919,13 @@ function reload(force: boolean): Promise<unknown> | null {
             loading.value = false;
 
             if (force) {
-                snackbar.value?.showMessage('Data has been updated');
+                desktopPageStore.addToast('Data has been updated');
             }
         }).catch(error => {
             loading.value = false;
 
             if (!error.processed) {
-                snackbar.value?.showError(error);
+                desktopPageStore.addErrorToast(error);
             }
         });
     }
@@ -1307,7 +1315,7 @@ function onClickTrendChartItem(item: { itemId: string, dateRange: TimeRangeAndDa
 }
 
 function onShowDateRangeError(message: string): void {
-    snackbar.value?.showError(message);
+    desktopPageStore.addErrorToast(message);
 }
 
 onBeforeRouteUpdate((to) => {

@@ -197,10 +197,22 @@ type TransactionModifyRequest struct {
 	GeoLocation          *TransactionGeoLocationRequest `json:"geoLocation" binding:"omitempty"`
 }
 
+// TransactionCreateBatchRequest represents all parameters of transaction creation batch request
+type TransactionCreateBatchRequest struct {
+	Transactions    []*TransactionCreateRequest `json:"transactions"`
+}
+
 // TransactionImportRequest represents all parameters of transaction import request
 type TransactionImportRequest struct {
 	Transactions    []*TransactionCreateRequest `json:"transactions"`
 	ClientSessionId string                      `json:"clientSessionId"`
+}
+
+// TransactionImportResponse represents the result and committed progress of transaction import
+type TransactionImportResponse struct {
+	Finished      bool `json:"finished"`
+	ImportedCount int  `json:"importedCount"`
+	TotalCount    int  `json:"totalCount"`
 }
 
 // TransactionImportProcessRequest represents all parameters of transaction import process request

@@ -83,7 +83,7 @@
                     <v-card variant="flat" class="w-100 px-4 pb-3" max-width="500">
                         <v-card-text class="pt-0">
                             <div class="text-center">
-                                <language-select-button :disabled="updating" />
+                                <language-select-button :disabled="updating" @error="desktopPageStore.addErrorToast" />
                             </div>
 
                             <v-divider class="mt-2 mb-3" />
@@ -98,14 +98,12 @@
             </v-col>
         </v-row>
 
-        <confirm-dialog ref="confirmDialog"/>
         <snack-bar ref="snackbar" @update:show="onSnackbarShowStateChanged" />
     </div>
 </template>
 
 <script setup lang="ts">
 import { VTextField } from 'vuetify/components/VTextField';
-import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
 import { ref, computed, useTemplateRef } from 'vue';
@@ -114,6 +112,7 @@ import { useRouter } from 'vue-router';
 import { useI18n } from '@/locales/helpers.ts';
 
 import { useRootStore } from '@/stores/index.ts';
+import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import { APPLICATION_LOGO_PATH } from '@/consts/asset.ts';
 
@@ -123,7 +122,6 @@ import {
     mdiChevronLeft
 } from '@mdi/js';
 
-type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
 type SnackBarType = InstanceType<typeof SnackBar>;
 
 const props = defineProps<{
@@ -135,12 +133,12 @@ const router = useRouter();
 const { tt } = useI18n();
 
 const rootStore = useRootStore();
+const desktopPageStore = useDesktopPageStore();
 
 const version = `${getClientDisplayVersion()}`;
 
 const passwordInput = useTemplateRef<VTextField>('passwordInput');
 const confirmPasswordInput = useTemplateRef<VTextField>('confirmPasswordInput');
-const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
 const snackbar = useTemplateRef<SnackBarType>('snackbar');
 
 const email = ref<string>('');
@@ -177,7 +175,7 @@ function resetPassword(): void  {
     const problemMessage = inputProblemMessage.value;
 
     if (problemMessage) {
-        snackbar.value?.showMessage(problemMessage);
+        desktopPageStore.addToast(problemMessage);
         return;
     }
 
@@ -196,7 +194,7 @@ function resetPassword(): void  {
         passwordChanged.value = false;
 
         if (!error.processed) {
-            snackbar.value?.showError(error);
+            desktopPageStore.addErrorToast(error);
         }
     });
 }

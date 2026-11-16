@@ -1,9 +1,14 @@
 package core
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/mayswind/ezbookkeeping/pkg/errs"
 )
 
 // TokenUserAgentCreatedViaCli is the user agent of token created via cli
@@ -30,6 +35,49 @@ const (
 	USER_TOKEN_TYPE_API                            TokenType = 8
 )
 
+// TextualTokenTypes maps token types to their textual token prefixes.
+var TextualTokenTypes = map[TokenType]string{
+	USER_TOKEN_TYPE_NORMAL:                         "tk",
+	USER_TOKEN_TYPE_REQUIRE_2FA:                    "2fa",
+	USER_TOKEN_TYPE_EMAIL_VERIFY:                   "vfy",
+	USER_TOKEN_TYPE_PASSWORD_RESET:                 "rst",
+	USER_TOKEN_TYPE_MCP:                            "mcp",
+	USER_TOKEN_TYPE_OAUTH2_CALLBACK_REQUIRE_VERIFY: "olk",
+	USER_TOKEN_TYPE_OAUTH2_CALLBACK:                "oauth2",
+	USER_TOKEN_TYPE_API:                            "ak",
+}
+
+// TextualTokenTypesReverse maps textual token prefixes to their token types
+var TextualTokenTypesReverse = func() map[string]TokenType {
+	reverseMap := make(map[string]TokenType)
+
+	for k, v := range TextualTokenTypes {
+		reverseMap[v] = k
+	}
+
+	return reverseMap
+}()
+
+// TextualDerivedTokenType represents the textual type of a derived token
+type TextualDerivedTokenType string
+
+// Textual derived token types
+const (
+	NONE_DERIVED_TOKEN                       TextualDerivedTokenType = ""
+	MAP_PROXY_DERIVED_NORMAL_TOKEN           TextualDerivedTokenType = "m"
+	USER_AVATAR_DERIVED_NORMAL_TOKEN         TextualDerivedTokenType = "a"
+	USER_CUSTOM_ICON_DERIVED_NORMAL_TOKEN    TextualDerivedTokenType = "i"
+	TRANSACTION_PICTURE_DERIVED_NORMAL_TOKEN TextualDerivedTokenType = "p"
+)
+
+// ValidTextualDerivedTokenTypes contains all supported textual derived token types
+var ValidTextualDerivedTokenTypes = map[TextualDerivedTokenType]bool{
+	MAP_PROXY_DERIVED_NORMAL_TOKEN:           true,
+	USER_AVATAR_DERIVED_NORMAL_TOKEN:         true,
+	USER_CUSTOM_ICON_DERIVED_NORMAL_TOKEN:    true,
+	TRANSACTION_PICTURE_DERIVED_NORMAL_TOKEN: true,
+}
+
 // UserTokenClaims represents user token
 type UserTokenClaims struct {
 	UserTokenId string    `json:"userTokenId"`
@@ -38,6 +86,97 @@ type UserTokenClaims struct {
 	Type        TokenType `json:"type"`
 	IssuedAt    int64     `json:"iat"`
 	ExpiresAt   int64     `json:"exp"`
+}
+
+// NormalTokenAdditionalData represents the additional data of a normal token
+type NormalTokenAdditionalData struct {
+	Scope                 NormalTokenScope
+	DerivedTokenExpiresAt int64
+}
+
+// NormalTokenScope represents the scope of a normal token
+type NormalTokenScope byte
+
+// Normal token scopes
+const (
+	NormalTokenScopeInvalid            NormalTokenScope = 0
+	NormalTokenScopeAll                NormalTokenScope = 1
+	NormalTokenScopeMapProxy           NormalTokenScope = 2
+	NormalTokenScopeUserAvatar         NormalTokenScope = 3
+	NormalTokenScopeUserCustomIcon     NormalTokenScope = 4
+	NormalTokenScopeTransactionPicture NormalTokenScope = 5
+
+	NormalTokenScopeMinValue NormalTokenScope = NormalTokenScopeAll
+	NormalTokenScopeMaxValue NormalTokenScope = NormalTokenScopeTransactionPicture
+)
+
+// NormalTokenScopeDerivedTokenTypeMap maps normal token scopes to their corresponding derived token types
+var NormalTokenScopeDerivedTokenTypeMap = map[NormalTokenScope]TextualDerivedTokenType{
+	NormalTokenScopeMapProxy:           MAP_PROXY_DERIVED_NORMAL_TOKEN,
+	NormalTokenScopeUserAvatar:         USER_AVATAR_DERIVED_NORMAL_TOKEN,
+	NormalTokenScopeUserCustomIcon:     USER_CUSTOM_ICON_DERIVED_NORMAL_TOKEN,
+	NormalTokenScopeTransactionPicture: TRANSACTION_PICTURE_DERIVED_NORMAL_TOKEN,
+}
+
+// String returns a textual representation of the token type enum
+func (t TokenType) String() string {
+	switch t {
+	case USER_TOKEN_TYPE_NORMAL:
+		return "Normal Token"
+	case USER_TOKEN_TYPE_REQUIRE_2FA:
+		return "Require 2FA Token"
+	case USER_TOKEN_TYPE_EMAIL_VERIFY:
+		return "Email Verify Token"
+	case USER_TOKEN_TYPE_PASSWORD_RESET:
+		return "Password Reset Token"
+	case USER_TOKEN_TYPE_MCP:
+		return "MCP Token"
+	case USER_TOKEN_TYPE_OAUTH2_CALLBACK_REQUIRE_VERIFY:
+		return "OAuth2 Callback Require Verify Token"
+	case USER_TOKEN_TYPE_OAUTH2_CALLBACK:
+		return "OAuth2 Callback Token"
+	case USER_TOKEN_TYPE_API:
+		return "API Token"
+	default:
+		return fmt.Sprintf("Invalid(%d)", int(t))
+	}
+}
+
+// MarshalBinary returns the binary representation of the normal token additional data.
+func (d *NormalTokenAdditionalData) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	_ = binary.Write(buf, binary.BigEndian, d.Scope)
+
+	if d.Scope != NormalTokenScopeAll {
+		_ = binary.Write(buf, binary.BigEndian, d.DerivedTokenExpiresAt)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// UnmarshalBinary decodes the binary normal token additional data.
+func (d *NormalTokenAdditionalData) UnmarshalBinary(data []byte) error {
+	if len(data) < 1 {
+		return errs.ErrCurrentInvalidToken
+	}
+
+	if NormalTokenScope(data[0]) == NormalTokenScopeAll && len(data) != 1 {
+		return errs.ErrCurrentInvalidToken
+	} else if NormalTokenScope(data[0]) != NormalTokenScopeAll && len(data) != 9 {
+		return errs.ErrCurrentInvalidToken
+	}
+
+	d.Scope = NormalTokenScopeInvalid
+	d.DerivedTokenExpiresAt = 0
+
+	buf := bytes.NewBuffer(data)
+	_ = binary.Read(buf, binary.BigEndian, &d.Scope)
+
+	if d.Scope != NormalTokenScopeAll {
+		_ = binary.Read(buf, binary.BigEndian, &d.DerivedTokenExpiresAt)
+	}
+
+	return nil
 }
 
 // GetExpirationTime returns the expiration time of this token

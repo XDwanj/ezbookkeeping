@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json/v2"
-	"fmt"
 	"io"
 	"math"
 	"math/big"
@@ -28,6 +27,7 @@ import (
 
 const pageCountForAccountStatement = 1000
 const pageCountForMovingAccountTransactions = 1000
+const transactionImportResultExpiration = 1 * time.Hour
 
 // TransactionsApi represents transaction api
 type TransactionsApi struct {
@@ -38,6 +38,7 @@ type TransactionsApi struct {
 	transactionTags       *services.TransactionTagService
 	transactionPictures   *services.TransactionPictureService
 	accounts              *services.AccountService
+	tokens                *services.TokenService
 	users                 *services.UserService
 }
 
@@ -51,13 +52,14 @@ var (
 			ApiUsingConfig: ApiUsingConfig{
 				container: settings.Container,
 			},
-			container: duplicatechecker.Container,
+			duplicateChecker: duplicatechecker.Container,
 		},
 		transactions:          services.Transactions,
 		transactionCategories: services.TransactionCategories,
 		transactionTags:       services.TransactionTags,
 		transactionPictures:   services.TransactionPictures,
 		accounts:              services.Accounts,
+		tokens:                services.Tokens,
 		users:                 services.Users,
 	}
 )
@@ -1215,6 +1217,11 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 	transactionTagIds := allTransactionTagIds[transaction.TransactionId]
 	transactionResp := transaction.ToTransactionInfoResponse(transactionTagIds, transactionEditable)
 
+	if transactionResp == nil {
+		log.Warnf(c, "[transactions.TransactionGetHandler] failed to assemble transaction response for transaction \"id:%d\" of user \"uid:%d\"", transaction.TransactionId, uid)
+		return nil, errs.ErrSystemError
+	}
+
 	if !transactionGetReq.TrimAccount {
 		if sourceAccount := accountMap[transaction.AccountId]; sourceAccount != nil {
 			transactionResp.SourceAccount = sourceAccount.ToAccountInfoResponse()
@@ -1235,8 +1242,15 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 		transactionResp.Tags = a.getTransactionTagInfoResponses(transactionTagIds, tagMap)
 	}
 
-	if transactionGetReq.WithPictures && a.CurrentConfig().EnableTransactionPictures {
-		transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
+	if transactionGetReq.WithPictures && a.CurrentConfig().EnableTransactionPictures && len(pictureInfos) > 0 {
+		pictureToken, err := a.GetTransactionPictureToken(c, uid)
+
+		if err != nil {
+			log.Errorf(c, "[transactions.TransactionGetHandler] failed to get transaction picture token for user \"uid:%d\", because %s", uid, err.Error())
+			return nil, errs.Or(err, errs.ErrTokenGenerating)
+		}
+
+		transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos, pictureToken)
 	}
 
 	return transactionResp, nil
@@ -1364,7 +1378,17 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 				}
 
 				transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
-				transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
+
+				if len(pictureInfos) > 0 {
+					pictureToken, err := a.GetTransactionPictureToken(c, uid)
+
+					if err != nil {
+						log.Errorf(c, "[transactions.TransactionCreateHandler] failed to get transaction picture token for user \"uid:%d\", because %s", uid, err.Error())
+						return nil, errs.Or(err, errs.ErrTokenGenerating)
+					}
+
+					transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos, pictureToken)
+				}
 
 				return transactionResp, nil
 			}
@@ -1382,7 +1406,17 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 
 	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_NEW_TRANSACTION, uid, transactionCreateReq.ClientSessionId, utils.Int64ToString(transaction.TransactionId))
 	transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
-	transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
+
+	if len(pictureInfos) > 0 {
+		pictureToken, err := a.GetTransactionPictureToken(c, uid)
+
+		if err != nil {
+			log.Errorf(c, "[transactions.TransactionCreateHandler] failed to get transaction picture token for user \"uid:%d\", because %s", uid, err.Error())
+			return nil, errs.Or(err, errs.ErrTokenGenerating)
+		}
+
+		transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos, pictureToken)
+	}
 
 	return transactionResp, nil
 }
@@ -1604,9 +1638,133 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 	log.Infof(c, "[transactions.TransactionModifyHandler] user \"uid:%d\" has updated transaction \"id:%d\" successfully", uid, transactionModifyReq.Id)
 
 	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, transactionEditable)
-	newTransactionResp.Pictures = a.GetTransactionPictureInfoResponseList(newPictureInfos)
+
+	if len(newPictureInfos) > 0 {
+		pictureToken, err := a.GetTransactionPictureToken(c, uid)
+
+		if err != nil {
+			log.Errorf(c, "[transactions.TransactionModifyHandler] failed to get transaction picture token for user \"uid:%d\", because %s", uid, err.Error())
+			return nil, errs.Or(err, errs.ErrTokenGenerating)
+		}
+
+		newTransactionResp.Pictures = a.GetTransactionPictureInfoResponseList(newPictureInfos, pictureToken)
+	}
 
 	return newTransactionResp, nil
+}
+
+// TransactionCreateBatchHandler saves a batch of new transactions by request parameters for current user
+func (a *TransactionsApi) TransactionCreateBatchHandler(c *core.WebContext) (any, *errs.Error) {
+	var transactionCreateBatchReq models.TransactionCreateBatchRequest
+	err := c.ShouldBindJSON(&transactionCreateBatchReq)
+
+	if err != nil {
+		log.Warnf(c, "[transactions.TransactionCreateBatchHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	clientTimezone, err := c.GetClientTimezone()
+
+	if err != nil {
+		log.Warnf(c, "[transactions.TransactionCreateBatchHandler] cannot get client timezone, because %s", err.Error())
+		return nil, errs.ErrClientTimezoneOffsetInvalid
+	}
+
+	if len(transactionCreateBatchReq.Transactions) < 1 {
+		return nil, errs.ErrTransactionBatchCreateNoTransactions
+	}
+
+	if len(transactionCreateBatchReq.Transactions) > 10 {
+		return nil, errs.ErrTransactionBatchCreateTooManyTransactions
+	}
+
+	newTransactionTagIdsMap := make(map[int][]int64, len(transactionCreateBatchReq.Transactions))
+
+	for i := 0; i < len(transactionCreateBatchReq.Transactions); i++ {
+		transactionCreateReq := transactionCreateBatchReq.Transactions[i]
+		tagIds, err := utils.StringArrayToInt64Array(transactionCreateReq.TagIds)
+
+		if err != nil {
+			log.Warnf(c, "[transactions.TransactionCreateBatchHandler] parse tag ids failed of transaction \"index:%d\", because %s", i, err.Error())
+			return nil, errs.ErrTransactionTagIdInvalid
+		}
+
+		if len(tagIds) > models.MaximumTagsCountOfTransaction {
+			return nil, errs.ErrTransactionHasTooManyTags
+		}
+
+		if transactionCreateReq.Type != models.TRANSACTION_TYPE_INCOME && transactionCreateReq.Type != models.TRANSACTION_TYPE_EXPENSE {
+			log.Warnf(c, "[transactions.TransactionCreateBatchHandler] transaction type of transaction \"index:%d\" is invalid", i)
+			return nil, errs.ErrTransactionTypeInvalid
+		}
+
+		if transactionCreateReq.DestinationAccountId != 0 {
+			log.Warnf(c, "[transactions.TransactionCreateBatchHandler] non-transfer transaction \"index:%d\" destination account cannot be set", i)
+			return nil, errs.ErrTransactionDestinationAccountCannotBeSet
+		}
+
+		if transactionCreateReq.DestinationAmount != 0 {
+			log.Warnf(c, "[transactions.TransactionCreateBatchHandler] non-transfer transaction \"index:%d\" destination amount cannot be set", i)
+			return nil, errs.ErrTransactionDestinationAmountCannotBeSet
+		}
+
+		newTransactionTagIdsMap[i] = tagIds
+	}
+
+	uid := c.GetCurrentUid()
+	user, err := a.users.GetUserById(c, uid)
+
+	if err != nil {
+		if !errs.IsCustomError(err) {
+			log.Errorf(c, "[transactions.TransactionCreateBatchHandler] failed to get user, because %s", err.Error())
+		}
+
+		return nil, errs.ErrUserNotFound
+	}
+
+	newTransactions := make([]*models.Transaction, len(transactionCreateBatchReq.Transactions))
+
+	for i := 0; i < len(transactionCreateBatchReq.Transactions); i++ {
+		transactionCreateReq := transactionCreateBatchReq.Transactions[i]
+		transaction := a.createNewTransactionModel(uid, transactionCreateReq, c.ClientIP())
+		newTransactions[i] = transaction
+	}
+
+	allUsedAccounts, err := a.getTransactionUsedAccounts(c, uid, newTransactions)
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionCreateBatchHandler] failed to get transaction used accounts for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	for i := 0; i < len(newTransactions); i++ {
+		transaction := newTransactions[i]
+		transactionEditable := user.CanEditTransactionByTransactionTime(transaction.TransactionTime, clientTimezone, allUsedAccounts[transaction.AccountId], allUsedAccounts[transaction.RelatedAccountId])
+
+		if !transactionEditable {
+			log.Warnf(c, "[transactions.TransactionCreateBatchHandler] transaction \"index:%d\" is not editable for user \"uid:%d\"", i, uid)
+			return nil, errs.ErrCannotCreateTransactionWithThisTransactionTime
+		}
+	}
+
+	err = a.transactions.BatchCreateTransactions(c, user.Uid, newTransactions, newTransactionTagIdsMap, nil)
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionCreateBatchHandler] failed to batch create transactions for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transactions.TransactionCreateBatchHandler] user \"uid:%d\" has created %d transactions", uid, len(newTransactions))
+
+	transactionResps := make([]*models.TransactionInfoResponse, len(newTransactions))
+
+	for i := 0; i < len(newTransactions); i++ {
+		transaction := newTransactions[i]
+		transactionResp := transaction.ToTransactionInfoResponse(newTransactionTagIdsMap[i], true)
+		transactionResps[i] = transactionResp
+	}
+
+	return transactionResps, nil
 }
 
 // TransactionBatchUpdateCategoriesHandler batch updates categories of transactions by request parameters for current user
@@ -2806,22 +2964,13 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 		found, remark := a.GetSubmissionRemark(duplicatechecker.DUPLICATE_CHECKER_TYPE_IMPORT_TRANSACTIONS, uid, transactionImportReq.ClientSessionId)
 
 		if found {
-			items := strings.Split(remark, ":")
+			var result *models.TransactionImportResponse
 
-			if len(items) >= 2 {
-				if items[0] == "finished" {
-					log.Infof(c, "[transactions.TransactionImportHandler] another \"%s\" transactions has been imported for user \"uid:%d\"", items[1], uid)
-					count, err := utils.StringToInt(items[1])
-
-					if err == nil {
-						return count, nil
-					}
-				} else if items[0] == "processing" {
-					return nil, errs.ErrRepeatedRequest
-				}
-			} else {
-				log.Warnf(c, "[transactions.TransactionImportHandler] another transaction import task may be executing, but remark \"%s\" is invalid", remark)
+			if json.Unmarshal([]byte(remark), &result) == nil && result != nil && result.Finished {
+				return a.getTransactionImportResponse(result)
 			}
+
+			return nil, errs.ErrRepeatedRequest
 		}
 	}
 
@@ -2905,22 +3054,55 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 		}
 	}
 
-	err = a.transactions.BatchCreateTransactions(c, user.Uid, newTransactions, newTransactionTagIdsMap, func(currentProcess float64) {
-		a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_IMPORT_TRANSACTIONS, uid, transactionImportReq.ClientSessionId, fmt.Sprintf("processing:%.2f", currentProcess))
-	})
-	count := len(newTransactions)
-
-	if err != nil {
-		a.RemoveSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_IMPORT_TRANSACTIONS, uid, transactionImportReq.ClientSessionId)
-		log.Errorf(c, "[transactions.TransactionImportHandler] failed to import %d transactions for user \"uid:%d\", because %s", count, uid, err.Error())
-		return nil, errs.Or(err, errs.ErrOperationFailed)
+	result := &models.TransactionImportResponse{
+		TotalCount: len(newTransactions),
 	}
 
-	log.Infof(c, "[transactions.TransactionImportHandler] user \"uid:%d\" has imported %d transactions successfully", uid, count)
+	if a.CurrentConfig().EnableDuplicateSubmissionsCheck && transactionImportReq.ClientSessionId != "" {
+		initialRemark, err := json.Marshal(result)
 
-	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_IMPORT_TRANSACTIONS, uid, transactionImportReq.ClientSessionId, fmt.Sprintf("finished:%d", count))
+		if err != nil {
+			log.Warnf(c, "[transactions.TransactionImportHandler] failed to marshal initial import result for user \"uid:%d\", because %s", uid, err.Error())
+			return nil, errs.ErrOperationFailed
+		}
 
-	return count, nil
+		found, remark := a.GetOrSetSubmissionRemarkWithCustomExpiration(duplicatechecker.DUPLICATE_CHECKER_TYPE_IMPORT_TRANSACTIONS, uid, transactionImportReq.ClientSessionId, string(initialRemark), transactionImportResultExpiration)
+
+		if found {
+			var previousResult *models.TransactionImportResponse
+
+			if json.Unmarshal([]byte(remark), &previousResult) == nil && previousResult != nil && previousResult.Finished {
+				return a.getTransactionImportResponse(previousResult)
+			}
+
+			return nil, errs.ErrRepeatedRequest
+		}
+	}
+
+	for i := 0; i < len(newTransactions); i++ {
+		err = a.transactions.CreateTransaction(c, newTransactions[i], newTransactionTagIdsMap[i], nil)
+
+		if err != nil {
+			result.Finished = true
+			a.setTransactionImportResult(uid, transactionImportReq.ClientSessionId, result)
+			log.Errorf(c, "[transactions.TransactionImportHandler] failed to import transactions for user \"uid:%d\" after %d of %d transactions, because %s", uid, result.ImportedCount, result.TotalCount, err.Error())
+
+			return nil, errs.NewErrorWithContext(errs.Or(err, errs.ErrOperationFailed), map[string]any{
+				"importedCount": result.ImportedCount,
+				"totalCount":    result.TotalCount,
+			})
+		}
+
+		result.ImportedCount = i + 1
+		a.setTransactionImportResult(uid, transactionImportReq.ClientSessionId, result)
+	}
+
+	result.Finished = true
+	a.setTransactionImportResult(uid, transactionImportReq.ClientSessionId, result)
+
+	log.Infof(c, "[transactions.TransactionImportHandler] user \"uid:%d\" has imported %d of %d transactions", uid, result.ImportedCount, result.TotalCount)
+
+	return result, nil
 }
 
 // TransactionImportProcessHandler returns the process of specified transaction import task by request parameters for current user
@@ -2945,32 +3127,19 @@ func (a *TransactionsApi) TransactionImportProcessHandler(c *core.WebContext) (a
 		return nil, nil
 	}
 
-	items := strings.Split(remark, ":")
-
-	if len(items) < 2 {
-		return nil, nil
-	}
-
-	if items[0] == "finished" {
-		return 100, nil
-	} else if items[0] != "processing" {
-		return nil, nil
-	}
-
-	process, err := utils.StringToFloat64(items[1])
+	var result *models.TransactionImportResponse
+	err = json.Unmarshal([]byte(remark), &result)
 
 	if err != nil {
 		log.Warnf(c, "[transactions.TransactionImportProcessHandler] parse process failed, because %s", err.Error())
 		return nil, nil
 	}
 
-	if process < 0 {
+	if result == nil {
 		return nil, nil
-	} else if process >= 100 {
-		process = 100
 	}
 
-	return process, nil
+	return a.getTransactionImportResponse(result)
 }
 
 func (a *TransactionsApi) filterTransactions(c *core.WebContext, uid int64, transactions []*models.Transaction, accountMap map[int64]*models.Account) []*models.Transaction {
@@ -3090,7 +3259,11 @@ func (a *TransactionsApi) getTransactionEssentialDataByTransactionIds(c *core.We
 		categoryIds = append(categoryIds, transactions[i].CategoryId)
 	}
 
-	accountMap, err = a.accounts.GetAccountsByAccountIds(c, uid, utils.ToUniqueInt64Slice(accountIds))
+	transactionIds = utils.ToUniqueInt64Slice(transactionIds)
+	accountIds = utils.ToUniqueInt64Slice(accountIds)
+	categoryIds = utils.ToUniqueInt64Slice(categoryIds)
+
+	accountMap, err = a.accounts.GetAccountsByAccountIds(c, uid, accountIds)
 
 	if err != nil {
 		log.Errorf(c, "[transactions.getTransactionEssentialDataByTransactionIds] failed to get accounts for user \"uid:%d\", because %s", uid, err.Error())
@@ -3105,7 +3278,7 @@ func (a *TransactionsApi) getTransactionEssentialDataByTransactionIds(c *core.We
 	}
 
 	if !trimCategory {
-		categoryMap, err = a.transactionCategories.GetCategoriesByCategoryIds(c, uid, utils.ToUniqueInt64Slice(categoryIds))
+		categoryMap, err = a.transactionCategories.GetCategoriesByCategoryIds(c, uid, categoryIds)
 
 		if err != nil {
 			log.Errorf(c, "[transactions.getTransactionEssentialDataByTransactionIds] failed to get transactions categories for user \"uid:%d\", because %s", uid, err.Error())
@@ -3123,7 +3296,7 @@ func (a *TransactionsApi) getTransactionEssentialDataByTransactionIds(c *core.We
 	}
 
 	if withPictures && a.CurrentConfig().EnableTransactionPictures {
-		pictureInfoMap, err = a.transactionPictures.GetPictureInfosByTransactionIds(c, uid, utils.ToUniqueInt64Slice(a.transactions.GetTransactionIds(transactions)))
+		pictureInfoMap, err = a.transactionPictures.GetPictureInfosByTransactionIds(c, uid, transactionIds)
 
 		if err != nil {
 			log.Errorf(c, "[transactions.getTransactionEssentialDataByTransactionIds] failed to get transactions pictures for user \"uid:%d\", because %s", uid, err.Error())
@@ -3170,6 +3343,18 @@ func (a *TransactionsApi) getTransactionUsedAccounts(c *core.WebContext, uid int
 }
 
 func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, user *models.User, transactions []*models.Transaction, allAccounts map[int64]*models.Account, categoryMap map[int64]*models.TransactionCategory, tagMap map[int64]*models.TransactionTag, allTransactionTagIds map[int64][]int64, pictureInfoMap map[int64][]*models.TransactionPictureInfo, clientTimezone *time.Location, withPictures bool, trimAccount bool, trimCategory bool, trimTag bool) (models.TransactionInfoResponseSlice, error) {
+	var err error
+	pictureToken := ""
+
+	if withPictures && a.CurrentConfig().EnableTransactionPictures && len(pictureInfoMap) > 0 {
+		pictureToken, err = a.GetTransactionPictureToken(c, user.Uid)
+
+		if err != nil {
+			log.Errorf(c, "[transactions.getTransactionResponseListResult] failed to get transaction picture token for user \"uid:%d\", because %s", user.Uid, err.Error())
+			return nil, errs.Or(err, errs.ErrTokenGenerating)
+		}
+	}
+
 	result := make(models.TransactionInfoResponseSlice, len(transactions))
 
 	for i := 0; i < len(transactions); i++ {
@@ -3207,7 +3392,7 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 			pictureInfos, exists := pictureInfoMap[transaction.TransactionId]
 
 			if exists {
-				result[i].Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
+				result[i].Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos, pictureToken)
 			}
 		}
 	}
@@ -3215,6 +3400,51 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 	sort.Sort(result)
 
 	return result, nil
+}
+
+func (a *TransactionsApi) GetTransactionPictureToken(c *core.WebContext, uid int64) (string, error) {
+	claims := c.GetTokenClaims()
+
+	if claims == nil {
+		log.Warnf(c, "[transactions.GetTransactionPictureToken] token is invalid, because claims is nil or token type is not normal")
+		return "", errs.ErrInvalidToken
+	}
+
+	if claims.Type != core.USER_TOKEN_TYPE_NORMAL {
+		return "", nil
+	}
+
+	pictureToken, err := a.tokens.DeriveTransactionPictureToken(c, claims, c.GetTokenRecord())
+
+	if err != nil {
+		log.Errorf(c, "[transactions.GetTransactionPictureToken] failed to derive transaction picture token for user \"uid:%d\", because %s", uid, err.Error())
+		return "", errs.Or(err, errs.ErrTokenGenerating)
+	}
+
+	return pictureToken, nil
+}
+
+func (a *TransactionsApi) getTransactionImportResponse(result *models.TransactionImportResponse) (any, *errs.Error) {
+	if !result.Finished || result.ImportedCount == result.TotalCount {
+		return result, nil
+	}
+
+	return nil, errs.NewErrorWithContext(errs.ErrOperationFailed, map[string]any{
+		"importedCount": result.ImportedCount,
+		"totalCount":    result.TotalCount,
+	})
+}
+
+func (a *TransactionsApi) setTransactionImportResult(uid int64, clientSessionId string, result *models.TransactionImportResponse) {
+	if !a.CurrentConfig().EnableDuplicateSubmissionsCheck || clientSessionId == "" {
+		return
+	}
+
+	remark, err := json.Marshal(result)
+
+	if err == nil {
+		a.SetSubmissionRemarkWithCustomExpiration(duplicatechecker.DUPLICATE_CHECKER_TYPE_IMPORT_TRANSACTIONS, uid, clientSessionId, string(remark), transactionImportResultExpiration)
+	}
 }
 
 func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreateReq *models.TransactionCreateRequest, clientIp string) *models.Transaction {
